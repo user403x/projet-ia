@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HelvetiaTax IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* Plan : outil de pré-clôture sobre, grille suisse. Fond gris froid, surfaces blanches, encre bleu nuit ; le rouge suisse est réservé au logo et aux alertes critiques. */
+:root{
+  --bg:#F2F4F6; --surface:#FFFFFF; --surface-2:#F7F8FA; --ink:#141A22; --muted:#5A6573; --line:#DCE1E7;
+  --accent:#1D3B5C; --accent-soft:#E6EDF5; --accent-ink:#FFFFFF;
+  --swiss:#D52B1E; --brand-blue:#1A4FA0; --brand-navy:#13254F; --ok:#2F6B4F; --ok-soft:#E5F1EA; --warn:#8A5A00; --warn-soft:#FBF1DC; --crit:#A3241A; --crit-soft:#F8E5E3;
+  --display:"Hanken Grotesk","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --body:"IBM Plex Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:6px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1419; --surface:#161C23; --surface-2:#1B222B; --ink:#E8ECF1; --muted:#9AA5B2; --line:#2A333E;
+  --accent:#8FB3DA; --accent-soft:#1E2B3A; --accent-ink:#0F1419; --brand-blue:#6FA8F0; --brand-navy:#E8ECF1;
+  --ok:#7CC39E; --ok-soft:#16281F; --warn:#E3B45C; --warn-soft:#2B2414; --crit:#F08A80; --crit-soft:#2E1A18; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0F1419; --surface:#161C23; --surface-2:#1B222B; --ink:#E8ECF1; --muted:#9AA5B2; --line:#2A333E;
+  --accent:#8FB3DA; --accent-soft:#1E2B3A; --accent-ink:#0F1419; --brand-blue:#6FA8F0; --brand-navy:#E8ECF1;
+  --ok:#7CC39E; --ok-soft:#16281F; --warn:#E3B45C; --warn-soft:#2B2414; --crit:#F08A80; --crit-soft:#2E1A18; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+h1,h2,h3,h4{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:1.55rem;font-weight:700} h2{font-size:1.25rem;font-weight:700} h3{font-size:1.02rem;font-weight:600}
+p{margin:0}
+a{color:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num,td.n,.tab{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-size:.86em}
+/* header */
+header.top{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:1240px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.flag{width:26px;height:30px;flex:none;display:block}
+.brand b{color:var(--brand-navy);font-family:var(--display);font-size:1.12rem;letter-spacing:-.01em}
+.brand span{color:var(--muted);font-size:.8rem;display:block;line-height:1.1}
+.ia{font-style:normal;color:var(--brand-blue)}
+.splash{position:fixed;inset:0;z-index:100;background:var(--bg);display:grid;place-items:center;padding:24px;transition:opacity .5s ease,visibility .5s}
+.splash.out{opacity:0;visibility:hidden}
+.splash-in{display:grid;justify-items:center;gap:18px;text-align:center}
+.splash .flag{width:64px;height:73px}
+.splash h1{font-size:clamp(2.4rem,7vw,4.4rem);font-weight:700;letter-spacing:-.025em;color:var(--brand-navy);line-height:1}
+.splash .slogan{font-family:var(--display);font-size:clamp(1rem,2.6vw,1.45rem);font-weight:500;color:var(--brand-navy);opacity:.9}
+.splash .sub{color:var(--muted);font-size:.9rem}
+.splash .btn{margin-top:8px;padding:10px 22px}
+@media (prefers-reduced-motion:reduce){.splash{transition:none}}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:3px 10px;font-size:.8rem;color:var(--muted);white-space:nowrap}
+.chip b{color:var(--ink);font-weight:600}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--r);padding:7px 13px;cursor:pointer;font-weight:500;font-size:.9rem;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--accent)}
+.btn.danger{color:var(--crit);border-color:var(--crit-soft)}
+.btn.sm{padding:4px 9px;font-size:.82rem}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+/* stepper */
+.steps{max-width:1240px;margin:0 auto;padding:0 20px;display:flex;gap:0;overflow-x:auto}
+.step{flex:1;min-width:150px;display:flex;align-items:center;gap:10px;padding:11px 12px 12px;border:0;background:none;cursor:pointer;text-align:left;border-bottom:3px solid transparent;color:var(--muted)}
+.step .n{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:.8rem;font-weight:600;flex:none;font-family:var(--display)}
+.step b{display:block;font-size:.88rem;color:inherit;font-weight:600}
+.step small{display:block;font-size:.74rem}
+.step.on{color:var(--ink);border-bottom-color:var(--accent)}
+.step.on .n{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.step.done .n{border-color:var(--ok);color:var(--ok)}
+.step:disabled{cursor:not-allowed;opacity:.55}
+main{max-width:1240px;margin:0 auto;padding:22px 20px 80px;display:grid;gap:18px}
+main > *,.grid > *,.card{min-width:0}
+.lead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.lead p{color:var(--muted);max-width:68ch;margin-top:4px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.card > .hd{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.card > .bd{padding:16px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))} .g3{grid-template-columns:repeat(3,minmax(0,1fr))} .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:900px){.g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:620px){.g2,.g3,.g4{grid-template-columns:1fr}}
+label.f{display:grid;gap:4px;font-size:.84rem;color:var(--muted)}
+label.f > span{display:flex;justify-content:space-between;gap:8px}
+label.f em{font-style:normal;font-size:.72rem;color:var(--muted);opacity:.85}
+input[type=text],input[type=number],select,textarea{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:7px 9px;color:var(--ink)}
+input[type=number]{font-variant-numeric:tabular-nums}
+textarea{min-height:70px;resize:vertical}
+.hint{font-size:.8rem;color:var(--muted)}
+.banner{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--accent-soft);padding:10px 13px;border-radius:var(--r);font-size:.88rem}
+.banner.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+.banner.crit{border-left-color:var(--crit);background:var(--crit-soft)}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.87rem}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.04em;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.nopiece td{background:var(--warn-soft)}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:.74rem;font-weight:600;white-space:nowrap;border:1px solid transparent}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-ok{color:var(--ok);background:var(--ok-soft)} .p-warn{color:var(--warn);background:var(--warn-soft)} .p-crit{color:var(--crit);background:var(--crit-soft)} .p-neutral{color:var(--muted);background:var(--surface-2);border-color:var(--line)} .p-acc{color:var(--accent);background:var(--accent-soft)}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:900px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 15px}
+.tile small{color:var(--muted);font-size:.78rem;display:block}
+.tile b{font-family:var(--display);font-size:1.45rem;font-variant-numeric:tabular-nums;display:block;margin-top:2px}
+.tile i{font-style:normal;font-size:.78rem;color:var(--muted)}
+/* checks */
+.checks{display:grid;gap:0}
+.chk{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;padding:11px 0;border-bottom:1px solid var(--line)}
+.chk:last-child{border-bottom:0}
+.chk .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:.75rem;font-weight:700}
+.ic.ok{background:var(--ok-soft);color:var(--ok)} .ic.warn{background:var(--warn-soft);color:var(--warn)} .ic.crit{background:var(--crit-soft);color:var(--crit)}
+/* agents */
+.agent{display:grid;grid-template-columns:minmax(180px,260px) 1fr auto;gap:14px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.agent:last-child{border-bottom:0}
+@media (max-width:620px){.agent{grid-template-columns:1fr auto}.agent .bar{grid-column:1/-1}}
+.bar{height:6px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.bar > i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s ease}
+.bar.paused > i{background:var(--warn)}
+.bar.done > i{background:var(--ok)}
+.logbox{font-family:var(--mono);font-size:.78rem;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;max-height:240px;overflow:auto;white-space:pre-wrap}
+/* fiches */
+.fiche{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);border-left:4px solid var(--line)}
+.fiche.r-faible{border-left-color:var(--ok)} .fiche.r-moyen{border-left-color:var(--warn)} .fiche.r-eleve{border-left-color:var(--crit)}
+.fiche .fh{display:grid;grid-template-columns:1fr auto;gap:12px;padding:12px 14px;cursor:pointer;align-items:center}
+.fiche .right{display:flex;align-items:center;gap:14px}
+.stamp{display:inline-flex;align-items:center;gap:6px;border-radius:5px;padding:5px 11px;font-size:.8rem;font-weight:700;white-space:nowrap;letter-spacing:.01em;border:1.5px solid transparent;font-family:var(--display)}
+.stamp.s-validee{background:var(--ok);color:#fff}
+.stamp.s-ajustee{background:var(--accent);color:var(--accent-ink)}
+.stamp.s-rejetee{background:var(--crit);color:#fff}
+.stamp.s-proposee{background:transparent;color:var(--muted);border-color:var(--line);border-style:dashed}
+:root[data-theme="dark"] .stamp.s-validee,:root[data-theme="dark"] .stamp.s-rejetee{color:#0F1419}
+.fiche.st-validee,.fiche.st-ajustee{background:linear-gradient(90deg,var(--ok-soft),var(--surface) 55%)}
+.fiche.st-rejetee{opacity:.72}
+.progress{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 15px;display:grid;gap:8px}
+.pbar{height:10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden;display:flex}
+.pbar .pv{background:var(--ok);transition:width .3s} .pbar .pr{background:var(--crit);opacity:.75;transition:width .3s}
+.zone{border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:10px;background:var(--surface-2)}
+.zone.zone-ok{border-color:var(--ok);border-width:1.5px;background:var(--ok-soft)}
+.zone-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.divider{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin:6px 0}
+.divider::before,.divider::after{content:"";flex:1;height:2px;background:var(--line)}
+.fiche.flash{animation:fl 1.2s ease}
+@keyframes fl{0%{box-shadow:0 0 0 3px var(--ok)}100%{box-shadow:0 0 0 0 transparent}}
+@media (max-width:620px){.fiche .right{flex-direction:column-reverse;align-items:flex-end;gap:6px}}
+.fiche .fh h3{font-size:.98rem}
+.fiche .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+.gain{text-align:right;font-family:var(--display);font-weight:700;font-variant-numeric:tabular-nums;font-size:1.1rem;white-space:nowrap}
+.gain small{display:block;font-family:var(--body);font-weight:400;font-size:.72rem;color:var(--muted)}
+.gain.neg{color:var(--crit)}
+.fiche .fb{border-top:1px solid var(--line);padding:14px;display:grid;gap:12px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:.88rem}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+@media (max-width:620px){.kv{grid-template-columns:1fr}.kv dt{margin-top:6px}}
+.refs{display:flex;gap:6px;flex-wrap:wrap}
+.ref{border:1px solid var(--line);background:var(--surface-2);border-radius:4px;padding:2px 8px;font-size:.78rem;cursor:pointer;font-weight:500;color:var(--accent)}
+.ref.ext{color:var(--muted);cursor:help}
+.ref:hover{border-color:var(--accent)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.status-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.84rem}
+.aibox{border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r);padding:11px 13px;font-size:.9rem;white-space:pre-wrap}
+.aibox.none{border-color:var(--warn);background:var(--warn-soft)}
+/* results */
+.bars{display:grid;gap:5px}
+.brow{display:grid;grid-template-columns:150px 1fr 104px 92px;gap:10px;align-items:center;font-size:.84rem}
+@media (max-width:620px){.brow{grid-template-columns:96px 1fr 84px}.brow .d{display:none}}
+.brow .track{height:14px;background:var(--surface-2);border-radius:3px;position:relative}
+.brow .track i{position:absolute;inset:0 auto 0 0;background:var(--accent);opacity:.35;border-radius:3px}
+.brow.base .track i{opacity:1}
+.brow.base{font-weight:600}
+.brow .d.neg{color:var(--ok)} .brow .d.pos{color:var(--crit)}
+/* modal & drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,14,20,.45);z-index:40;display:none}
+.scrim.on{display:block}
+.modal{position:fixed;z-index:50;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,calc(100% - 28px));max-height:calc(100% - 40px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;display:none;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal.on{display:block}
+.modal .hd{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.modal .bd{padding:16px 18px;display:grid;gap:12px}
+.modal .ft{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.drawer{position:fixed;z-index:45;top:0;right:0;bottom:0;width:min(470px,100%);background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
+.drawer.on{transform:none}
+.drawer .hd{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.drawer .bd{flex:1;overflow:auto;padding:14px 16px;display:grid;gap:12px;align-content:start}
+.drawer .ft{border-top:1px solid var(--line);padding:12px 16px;display:grid;gap:8px}
+.msg{border-radius:var(--r);padding:10px 12px;font-size:.9rem;white-space:pre-wrap}
+.msg.u{background:var(--accent-soft);justify-self:end;max-width:88%}
+.msg.a{background:var(--surface-2);border:1px solid var(--line)}
+.qbox{border:1px solid var(--warn);background:var(--warn-soft);border-radius:var(--r);padding:12px 14px;display:grid;gap:8px}
+.qbox b{font-family:var(--display)}
+.opts{display:grid;gap:8px}
+.opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:var(--r);padding:9px 11px;cursor:pointer;background:var(--surface)}
+.opt:hover{border-color:var(--accent)}
+.opt input{margin-top:3px}
+.kbhit{border-bottom:1px solid var(--line);padding:9px 0;font-size:.86rem}
+.kbhit b{color:var(--accent)}
+.kbhit p{color:var(--muted);white-space:pre-wrap;max-height:6.2em;overflow:hidden}
+.src-text{white-space:pre-wrap;font-size:.86rem;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:12px;max-height:55vh;overflow:auto}
+.foot{max-width:1240px;margin:0 auto;padding:0 20px 30px;color:var(--muted);font-size:.78rem}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.hide{display:none!important}
+.sec-title{display:flex;align-items:baseline;gap:10px}
+.sec-title .ix{font-family:var(--mono);font-size:.75rem;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="splash" id="splash" role="dialog" aria-label="Bienvenue">
+  <div class="splash-in">
+    <svg class="flag" viewBox="0 0 60 68" aria-hidden="true"><path d="M4 4h52v28c0 18-12 28-26 32C16 60 4 50 4 32z" fill="#D52B1E"/><g fill="#fff"><rect x="25" y="12" width="10" height="11" rx="1.5"/><rect x="25" y="37" width="10" height="11" rx="1.5"/><rect x="11" y="25" width="11" height="10" rx="1.5"/><rect x="38" y="25" width="11" height="10" rx="1.5"/><rect x="25.5" y="25.5" width="9" height="9" rx="1.5"/></g></svg>
+    <h1>HelvetiaTax <em class="ia">IA</em></h1>
+    <p class="slogan">Think Smart. Tax Smarter. Trust HelvetiaTax <em class="ia">IA</em>.</p>
+    <p class="sub">Copilote fiscal de pré-clôture pour PME suisses</p>
+    <button class="btn primary" id="enter" type="button">Commencer</button>
+  </div>
+</div>
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><svg class="flag" viewBox="0 0 60 68" aria-hidden="true"><path d="M4 4h52v28c0 18-12 28-26 32C16 60 4 50 4 32z" fill="#D52B1E"/><g fill="#fff"><rect x="25" y="12" width="10" height="11" rx="1.5"/><rect x="25" y="37" width="10" height="11" rx="1.5"/><rect x="11" y="25" width="11" height="10" rx="1.5"/><rect x="38" y="25" width="11" height="10" rx="1.5"/><rect x="25.5" y="25.5" width="9" height="9" rx="1.5"/></g></svg><div><b>HelvetiaTax <em class="ia">IA</em></b><span>Copilote fiscal de pré-clôture · PME suisses</span></div></div>
+    <span class="chip" id="chipDossier">Dossier <b>—</b></span>
+    <span class="chip" id="chipCanton">Canton <b>—</b></span>
+    <span class="chip" id="chipAI">IA <b>…</b></span>
+    <button class="btn sm" id="btnKB" type="button">Base juridique</button>
+    <button class="btn sm primary" id="btnChat" type="button">Assistant IA</button>
+  </div>
+  <nav class="steps" id="steps" aria-label="Étapes"></nav>
+</header>
+
+<main id="view"></main>
+<div class="foot" id="foot"></div>
+
+<div class="scrim" id="scrim"></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"></div>
+
+<aside class="drawer" id="drawer" aria-label="Assistant HelvetiaTax">
+  <div class="hd"><div><h3>Assistant HelvetiaTax</h3><div class="hint">Répond uniquement avec des sources de la base</div></div><button class="btn sm" id="closeChat" type="button">Fermer</button></div>
+  <div class="bd" id="chatLog"></div>
+  <div class="ft">
+    <textarea id="chatIn" placeholder="Ex. : Quelles provisions peut-on constituer avant la clôture ?"></textarea>
+    <div class="row"><span class="hint" id="chatState"></span><span class="spacer"></span><button class="btn sm" id="chatStop" type="button" disabled>Arrêter</button><button class="btn sm primary" id="chatSend" type="button">Envoyer</button></div>
+  </div>
+</aside>
+
+<script src="config.js"></script>
+<script>
+"use strict";
+/* ================== PARAMÈTRES 2026 (datés, sourcés) ================== */
+const RULES_VERSION = "HTX-2026.1";
+const CANTONS = [
+ ["LU","Lucerne",11.66],["ZG","Zoug",11.71],["NW","Nidwald",11.97],["GL","Glaris",12.50],["UR","Uri",12.64],["AI","Appenzell Rh.-Int.",12.66],["OW","Obwald",12.74],["AR","Appenzell Rh.-Ext.",13.04],["TG","Thurgovie",13.21],["SZ","Schwytz",13.30],["BL","Bâle-Campagne",13.45],["FR","Fribourg",14.12],["SG","Saint-Gall",14.29],["BS","Bâle-Ville",14.53],["GE","Genève",14.70],["AG","Argovie",14.71],["VD","Vaud",14.72],["GR","Grisons",14.77],["NE","Neuchâtel",14.89],["SH","Schaffhouse",15.08],["SO","Soleure",15.45],["JU","Jura",15.80],["TI","Tessin",16.05],["VS","Valais",17.12],["ZH","Zurich",19.47],["BE","Berne",20.54]
+].map(([code,name,rate])=>({code,name,rate:rate/100}));
+const CANTON_PACKS = { GE:{ law:"LIPM / LIPP (GE)", rateSrc:"Taux GE 14,7 % (PL 13496)" } };
+const P = {
+  ifdNominal:0.085, ifdEff:0.085/1.085,
+  tva:{normal:0.081, reduit:0.026, hebergement:0.038}, tdfnSeuil:5024000,
+  amort:{mobilier:0.25, machines:0.30, informatique:0.40, vehicules:0.40},
+  ducroire:{ch:0.05, etranger:0.10}, reserveStock:1/3, pertesAns:7,
+  ia:0.35, iaBrut:0.35/0.65, interetMinCC:0.0075,
+  avsTotal:0.106, avsEmp:0.053, acEmp:0.011, acPlafond:148200, p3a:7258,
+  partielIFD:0.70, vehiculePrive:0.009
+};
+const EXT = { // paramètres de pratique sans texte primaire dans la base
+  noticeA:"Notice A 1995 AFC (taux d’amortissement) – texte non chargé dans la base",
+  ducroire:"Pratique AFC ducroire forfaitaire 5 % / 10 % – texte non chargé dans la base",
+  vehicule:"Pratique AFC part privée véhicule 0,9 %/mois – texte non chargé dans la base",
+  lpp:"LPP art. 79b – texte non chargé dans la base"
+};
+
+/* ================== DOSSIER D'EXEMPLE (fictif) ================== */
+const DEMO = {
+  nom:"Alpine Conseil SA", forme:"SA", structure:"Siège", canton:"GE", commune:"Genève", creation:2014, effectif:14, noga:"70.22 – Conseil pour les affaires et autres conseils de gestion", exercice:2026,
+  tva:true, tvaMethode:"effective", ca:2400000, bai:400000, capital:100000, reservesLeg:50000, rac:80000, benefReporte:220000,
+  pertes:[{annee:2019,montant:30000,utilise:0}],
+  debiteursCH:200000, debiteursEtr:0, ducroireExistant:0, stock:0, reserveStockExistante:0,
+  dividendePrevu:120000,
+  aug:{montant:0},
+  actionnaire:{nom:"M. Keller", participation:100, salaire:180000, p3aVerse:0, lppRachat:50000, ccSolde:150000, ccInteret:0},
+  immos:[
+    {id:"1510",libelle:"Mobilier de bureau (acquis 03.2026)",categorie:"mobilier",valeur:60000,amortCompta:6000},
+    {id:"1520",libelle:"Matériel informatique",categorie:"informatique",valeur:30000,amortCompta:7500},
+    {id:"1530",libelle:"Véhicule de direction",categorie:"vehicules",valeur:60000,amortCompta:24000,prixAchat:60000,usagePrive:true,partPriveeComptab:false}
+  ],
+  tvaCollectee:194400, tvaPrealable:38200,
+  journal:[
+    ["2026-0012","2026-01-15","1100","3200",180000,"Honoraires Q1 – Client Banque Lémanique","F-1001","Banque Lémanique SA",""],
+    ["2026-0045","2026-02-03","6000","1020",8500,"Loyer bureaux février – Rue du Rhône","L-02","Régie du Rhône",""],
+    ["2026-0102","2026-03-12","1510","2000",60000,"Mobilier de bureau – Atelier Vaudois","F-088","Atelier Vaudois Sàrl",""],
+    ["2026-0118","2026-03-28","6640","1020",4800,"Voyage Lisbonne – Keller (2 pers.)","F-131","TAP Air Portugal","doute"],
+    ["2026-0156","2026-04-09","6570","2000",14800,"Licences et serveurs IT (TVA 8,1 % non ventilée)","F-140","DataSwiss AG","tva_ni"],
+    ["2026-0157","2026-04-09","6570","2000",17229.63,"Matériel réseau (TVA 8,1 % non ventilée)","F-141","DataSwiss AG","tva_ni"],
+    ["2026-0201","2026-05-02","6500","1020",450,"Amende d’ordre – vitesse véhicule direction","—","Police cantonale",""],
+    ["2026-0233","2026-05-20","6500","1020",1200,"Abonnement fitness annuel – M. Keller","F-205","Lakeside Fitness",""],
+    ["2026-0274","2026-06-14","6800","1519",6000,"Amortissement mobilier 10 %","OD-06","—",""],
+    ["2026-0275","2026-06-14","6800","1529",7500,"Amortissement informatique 25 %","OD-06","—",""],
+    ["2026-0276","2026-06-14","6800","1539",24000,"Amortissement véhicule 40 %","OD-06","—",""],
+    ["2026-0302","2026-06-30","1099","1020",3250,"Paiement à clarifier","","",""],
+    ["2026-0340","2026-07-21","6530","1020",25000,"Honoraires conseil – Mme Keller","","Mme Keller","proche"],
+    ["2026-0388","2026-08-30","5000","1020",180000,"Salaire administrateur 2026","PS-08","M. Keller",""],
+    ["2026-0389","2026-08-30","5700","1020",11520,"Charges sociales employeur (part)","AVS-08","Caisse AVS",""],
+    ["2026-0420","2026-09-12","6600","1020",12000,"Campagne publicitaire automne","F-310","Agence Rhône",""],
+    ["2026-0455","2026-10-01","1150","1020",150000,"Avance à l’actionnaire – sans intérêt","CA-01","M. Keller",""],
+    ["2026-0490","2026-10-31","6640","1020",2600,"Repas clients – séminaire Annecy","F-355","Hôtel du Lac Annecy",""],
+    ["2026-0512","2026-11-10","6500","1020",5000,"Retrait espèces","","",""],
+    ["2026-0530","2026-11-20","1100","3200",2220000,"Honoraires cumulés avril–décembre (résumé)","F-1002…","Divers clients",""]
+  ].map(([no,date,debit,credit,montant,libelle,piece,tiers,tag])=>({no,date,debit,credit,montant,libelle,piece,tiers,tag})),
+  planted:[
+    {id:"P1",label:"Perte 2019 non imputée (dernière année utilisable)"},
+    {id:"P2",label:"TVA préalable non récupérée sur factures IT"},
+    {id:"P3",label:"Ducroire forfaitaire non constitué"},
+    {id:"P4",label:"Mobilier amorti à 10 % au lieu de 25 %"},
+    {id:"P5",label:"Informatique amortie à 25 % au lieu de 40 %"},
+    {id:"P6",label:"Avance actionnaire 150'000 sans intérêt"},
+    {id:"P7",label:"Amende comptabilisée en charge"},
+    {id:"P8",label:"Charge privée de l’actionnaire (fitness)"},
+    {id:"P9",label:"Voyage à finalité incertaine (Lisbonne)"},
+    {id:"P10",label:"Honoraires versés à un proche sans pièce"},
+    {id:"P11",label:"Compte d’attente 1099 non soldé"},
+    {id:"P12",label:"Écritures sans pièce justificative"},
+    {id:"P13",label:"Part privée véhicule non comptabilisée"},
+    {id:"P14",label:"Dividende prévu sans utiliser les RAC"},
+    {id:"P15",label:"Pilier 3a de l’actionnaire non versé"}
+  ]
+};
+const ACCOUNTS = {"1020":"Banque","1099":"Compte d’attente","1100":"Débiteurs","1109":"Ducroire","1150":"Avance actionnaire","1170":"TVA préalable","1510":"Mobilier","1519":"Corr. valeur mobilier","1520":"Informatique","1529":"Corr. valeur informatique","1530":"Véhicules","1539":"Corr. valeur véhicules","2000":"Créanciers","2200":"TVA due","2800":"Capital-actions","2950":"Réserves issues d’apports de capital","3200":"Honoraires","5000":"Salaires","5700":"Charges sociales","3805":"Pertes sur clients, variation du ducroire","6000":"Loyer","6200":"Frais de véhicules","6500":"Frais d’administration","6530":"Honoraires de tiers","6570":"Informatique","6600":"Publicité","6640":"Frais de voyage et représentation","6800":"Amortissements","6950":"Produits financiers","7900":"Produits / charges extraordinaires","8900":"Impôts directs"};
+
+/* ================== ÉTAT ================== */
+const S = { step:1, maxStep:1, d:structuredClone(DEMO), answers:{}, fiches:[], ecartees:[], log:[], audit:[], run:null, chat:[], open:{}, aiNotes:{}, odFormat:"Bexio" };
+let KB = [], KBIDX = null, AI = null, DL = null;
+
+/* ================== UTILITAIRES ================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const chf = (v, d=0) => { if(v==null||isNaN(v)) return "—"; const neg=v<0; const s=Math.abs(v).toFixed(d).split("."); s[0]=s[0].replace(/\B(?=(\d{3})+(?!\d))/g,"'"); return (neg?"−":"")+s.join("."); };
+const pct = (v, d=2) => (v*100).toFixed(d).replace(".",",")+" %";
+const canton = code => CANTONS.find(c=>c.code===code) || CANTONS.find(c=>c.code==="GE");
+const rate = () => canton(S.d.canton).rate;
+const now = () => new Date().toLocaleString("fr-CH",{dateStyle:"short",timeStyle:"medium"});
+function audit(actor, action, objet="") { S.audit.push({t:now(), actor, action, objet, v:RULES_VERSION}); }
+function log(line){ S.log.push(new Date().toLocaleTimeString("fr-CH")+"  "+line); const b=$("#runlog"); if(b){ b.textContent=S.log.join("\n"); b.scrollTop=b.scrollHeight; } }
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+/* ================== BASE JURIDIQUE (recherche BM25) ================== */
+const STOP = new Set("le la les de des du un une et en a au aux pour par sur dans est sont que qui ne pas plus ou se ce cette ces il elle on l d s qu art al let ch".split(" "));
+const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[’']/g," ");
+const toks = s => norm(s).split(/[^a-z0-9]+/).filter(w=>w.length>1 && !STOP.has(w));
+function buildIndex(){
+  const df = new Map(); const docs = KB.map(c=>{ const t=toks((c.ref||"")+" "+(c.title||"")+" "+c.text); const tf=new Map(); t.forEach(w=>tf.set(w,(tf.get(w)||0)+1)); tf.forEach((_,w)=>df.set(w,(df.get(w)||0)+1)); return {tf,len:t.length}; });
+  const avg = docs.reduce((a,d)=>a+d.len,0)/Math.max(1,docs.length);
+  KBIDX = {df,docs,avg,N:docs.length};
+}
+function search(q, k=6, filter=null){
+  if(!KBIDX) return [];
+  const qt = toks(q); const {df,docs,avg,N}=KBIDX; const k1=1.3,b=.72; const res=[];
+  const refQ = (q.match(/\b(LIFD|LHID|LIA|LTVA)\s*(?:art\.?)?\s*(\d+[a-z]*)/i)||[]);
+  docs.forEach((d,i)=>{ const c=KB[i]; if(filter && !filter(c)) return; let s=0; qt.forEach(w=>{ const f=d.tf.get(w); if(!f) return; const idf=Math.log(1+(N-df.get(w)+.5)/(df.get(w)+.5)); s+=idf*(f*(k1+1))/(f+k1*(1-b+b*d.len/avg)); });
+    if(refQ[1] && c.ref && norm(c.ref)===norm(refQ[1]+" art. "+refQ[2])) s+=50;
+    if(c.type==="loi") s*=1.15; if(c.type==="param") s*=1.2;
+    if(s>0) res.push([s,c]); });
+  res.sort((a,b)=>b[0]-a[0]);
+  const out=[], seen=new Set(); for(const [,c] of res){ const key=c.ref+"|"+c.text.slice(0,60); if(seen.has(key)) continue; seen.add(key); out.push(c); if(out.length>=k) break; }
+  return out;
+}
+const kbByRef = ref => KB.find(c=>c.ref===ref);
+const refExists = ref => !!kbByRef(ref);
+
+/* ================== MOTEUR DE CALCUL (déterministe) ================== */
+function gainOf(f){
+  const r = rate(), t = (S.answers.Q_TMARG?.t ?? 0.30), m = f.montantAjuste ?? f.montant;
+  const g = {ifd:0, icc:0, tva:0, ia:0, pp:0, dBase:0};
+  switch(f.kind){
+    case "deduction": g.dBase=-m; break;
+    case "reprise": g.dBase=+m; break;
+    case "tva_recup": g.tva=+m; g.dBase=+m; break;
+    case "tva_cout": g.tva=-m; break;
+    case "interet": g.dBase=+m; g.iaRisk=m*P.iaBrut; break;
+    case "pp": g.pp=m*t*(f.ppFactor??1); break;
+    case "tdfn": g.tva=m; break;
+    case "info": break;
+  }
+  g.ifd = -g.dBase*P.ifdEff; g.icc = -g.dBase*(r-P.ifdEff);
+  g.total = g.ifd+g.icc+g.tva+g.ia+g.pp;
+  return g;
+}
+const isActive = f => f.statut==="validee" || f.statut==="ajustee";
+
+/* ================== AGENTS ================== */
+let FID=0; const mk = o => ({id:"F-"+String(++FID).padStart(3,"0"), statut:"proposee", ...o});
+const pseudoMap = () => { const m={}; let i=0; S.d.journal.forEach(e=>{ if(e.tiers && e.tiers!=="—" && !(e.tiers in m)) m[e.tiers]="T-"+String(++i).padStart(3,"0"); }); return m; };
+
+const AGENTS = [
+ { id:"transverse", name:"Contrôles transverses", impot:"Transverse", run(d){
+   const F=[], Q=[];
+   const att = d.journal.filter(e=>e.debit==="1099"||e.credit==="1099");
+   if(att.length){ const solde=att.reduce((a,e)=>a+(e.debit==="1099"?e.montant:-e.montant),0);
+     if(Math.abs(solde)>0) F.push(mk({agent:"transverse",impot:"Transverse",kind:"info",planted:"P11",titre:"Compte d’attente 1099 non soldé",constat:`Le compte 1099 présente un solde de CHF ${chf(solde)} au 31.12. Un compte d’attente doit être soldé avant la clôture : la nature de la dépense détermine sa déductibilité.`,pieces:att.map(e=>`${e.no} · ${e.libelle}`),ecriture:null,montant:solde,refs:["LIFD art. 58"],risque:"moyen",urgence:"Avant clôture"})); }
+   const sansPiece = d.journal.filter(e=>!e.piece||e.piece==="—"||e.piece==="");
+   const sp = sansPiece.filter(e=>e.debit!=="1099");
+   if(sp.length) F.push(mk({agent:"transverse",impot:"Transverse",kind:"info",planted:"P12",titre:`${sp.length} écritures sans pièce justificative`,constat:"Une charge sans pièce ne peut pas être justifiée par l’usage commercial en cas de contrôle. Joindre les pièces ou reprendre la charge.",pieces:sp.map(e=>`${e.no} · ${e.libelle} · CHF ${chf(e.montant)}`),ecriture:null,montant:sp.reduce((a,e)=>a+e.montant,0),refs:["LIFD art. 58","LIFD art. 59"],risque:"moyen",urgence:"Avant clôture"}));
+   return {F,Q};
+ }},
+ { id:"benefice", name:"Bénéfice & capital (IFD + ICC)", impot:"IFD + ICC", run(d){
+   const F=[], Q=[];
+   // Pertes
+   const ex=d.exercice;
+   d.pertes.forEach(p=>{ const reste=p.montant-p.utilise; if(reste<=0) return; const age=ex-p.annee; if(age>P.pertesAns) return;
+     const imputable=Math.min(reste, Math.max(0,d.bai));
+     F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"deduction",planted:"P1",titre:`Perte ${p.annee} non imputée${age===P.pertesAns?" (dernière année utilisable)":""}`,constat:`La perte de l’exercice ${p.annee} (CHF ${chf(reste)} non utilisés) entre dans les ${P.pertesAns} exercices précédant la période fiscale ${ex}. ${age===P.pertesAns?"Elle expire après cet exercice : à imputer impérativement.":""}`,pieces:["Tableau des pertes reportées"],ecriture:null,montant:imputable,refs:["LIFD art. 67","LHID art. 25"],risque:"faible",urgence:"Déclaration"})); });
+   // Amortissements
+   d.immos.forEach(im=>{ const admis=P.amort[im.categorie]; if(!admis) return; const max=Math.round(im.valeur*admis); const applique=im.amortCompta; if(applique>=max) return;
+     const comp = {"1510":"1519","1520":"1529","1530":"1539"}[im.id]||"15x9";
+     F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"deduction",planted:im.id==="1510"?"P4":im.id==="1520"?"P5":null,titre:`Amortissement ${im.libelle.split(" (")[0].toLowerCase()} sous le taux admis`,constat:`Amorti à ${pct(applique/im.valeur,0)} (CHF ${chf(applique)}) alors que le taux dégressif admis est de ${pct(admis,0)} (CHF ${chf(max)}). L’amortissement complémentaire doit être comptabilisé avant l’approbation des comptes.`,pieces:[`Compte ${im.id}`,"Tableau des immobilisations"],ecriture:{d:"6800",c:comp},montant:max-applique,refs:["LIFD art. 62","LHID art. 24"],ext:[EXT.noticeA],risque:"faible",urgence:"Avant clôture"})); });
+   // Ducroire
+   const duc = Math.round(d.debiteursCH*P.ducroire.ch + d.debiteursEtr*P.ducroire.etranger) - d.ducroireExistant;
+   if(duc>0) F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"deduction",planted:"P3",titre:"Ducroire forfaitaire non constitué",constat:`Débiteurs suisses CHF ${chf(d.debiteursCH)} (5 %)${d.debiteursEtr?` et étrangers CHF ${chf(d.debiteursEtr)} (10 %)`:""}. Aucune provision n’est comptabilisée.`,pieces:["Compte 1100","Balance âgée des débiteurs"],ecriture:{d:"3805",c:"1109"},montant:duc,refs:["LIFD art. 63"],ext:[EXT.ducroire],risque:"faible",urgence:"Avant clôture"}));
+   // Réserve stock
+   if(d.stock>0){ const rs=Math.round(d.stock*P.reserveStock)-d.reserveStockExistante; if(rs>0) F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"deduction",titre:"Réserve sur stocks non constituée",constat:`Stock CHF ${chf(d.stock)} : réserve admise jusqu’à un tiers.`,pieces:["Inventaire"],ecriture:{d:"4000",c:"1209"},montant:rs,refs:["LIFD art. 63"],risque:"faible",urgence:"Avant clôture"})); }
+   // Charges non déductibles
+   d.journal.filter(e=>/amende/i.test(e.libelle)).forEach(e=>F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"reprise",planted:"P7",titre:"Amende comptabilisée en charge",constat:`L’écriture ${e.no} (CHF ${chf(e.montant)}) est une sanction à caractère pénal : elle n’est pas une charge justifiée par l’usage commercial et doit être reprise.`,pieces:[`${e.no} · compte ${e.debit}`],ecriture:null,montant:e.montant,refs:["LIFD art. 59"],risque:"faible",urgence:"Déclaration"})));
+   d.journal.filter(e=>/fitness|privé/i.test(e.libelle)).forEach(e=>F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"reprise",planted:"P8",titre:"Charge privée de l’actionnaire",constat:`L’écriture ${e.no} « ${e.libelle} » (CHF ${chf(e.montant)}) couvre une dépense privée. Elle constitue une distribution dissimulée : reprise au bénéfice, à refacturer à l’actionnaire ou à traiter comme salaire.`,pieces:[`${e.no} · ${e.piece}`],ecriture:{d:"1150",c:"6500"},montant:e.montant,refs:["LIFD art. 58","Slides – Introduction générale à la fiscalité (UNIGE, A. Faltin), p. 281"],risque:"eleve",urgence:"Avant clôture"})));
+   // Questions d'expert : voyage, honoraires proche
+   d.journal.filter(e=>e.tag==="doute").forEach(e=>{ const q="Q_"+e.no; const a=S.answers[q];
+     if(!a) Q.push({id:q,agent:"benefice",titre:"Charge à finalité incertaine",texte:`L’écriture ${e.no} « ${e.libelle} » (CHF ${chf(e.montant)}) peut être un déplacement professionnel ou une dépense privée. Le moteur ne peut pas trancher sans information.`,refs:["LIFD art. 58","LIFD art. 59"],options:[["commercial","Déplacement professionnel documenté (programme, clients)"],["prive","Dépense privée : à reprendre"],["partiel","Mixte : reprendre 50 %"]]});
+     else if(a.v!=="commercial") F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"reprise",planted:"P9",titre:"Voyage à reprendre (réponse de l’expert)",constat:`Selon la réponse de l’expert (${a.v==="prive"?"dépense privée":"usage mixte"}), ${a.v==="prive"?"la totalité":"50 %"} de l’écriture ${e.no} est reprise au bénéfice imposable.`,pieces:[`${e.no} · ${e.piece}`],ecriture:{d:"1150",c:"6640"},montant:a.v==="prive"?e.montant:e.montant/2,refs:["LIFD art. 58"],risque:"moyen",urgence:"Avant clôture",expert:true}));
+     else F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"info",planted:"P9",titre:"Voyage confirmé professionnel",constat:`L’expert confirme le caractère professionnel de l’écriture ${e.no}. Conserver le programme et la liste des participants au dossier.`,pieces:[`${e.no}`],montant:0,refs:["LIFD art. 59"],risque:"faible",urgence:"Déclaration",expert:true})); });
+   d.journal.filter(e=>e.tag==="proche").forEach(e=>{ const q="Q_"+e.no; const a=S.answers[q];
+     if(!a) Q.push({id:q,agent:"benefice",titre:"Prestation d’une personne proche",texte:`L’écriture ${e.no} « ${e.libelle} » (CHF ${chf(e.montant)}) est versée à une personne proche de l’actionnaire, sans pièce. Une rémunération supérieure au prix du marché est une prestation appréciable en argent.`,refs:["LIFD art. 58","Slides – Introduction générale à la fiscalité (UNIGE, A. Faltin), p. 281"],options:[["marche","Prestation réelle, prix conforme au marché (contrat et rapport disponibles)"],["excessif","Pas de contre-prestation équivalente : à reprendre"],["inconnu","Je ne sais pas : laisser en suspens"]]});
+     else if(a.v==="excessif") F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"reprise",planted:"P10",titre:"Honoraires à un proche : prestation appréciable en argent",constat:`Reprise de CHF ${chf(e.montant)} au bénéfice. Impôt anticipé de 35 % dû sur la prestation (calcul brut pour net si non refacturée : CHF ${chf(e.montant*P.iaBrut)}).`,pieces:[`${e.no}`],ecriture:{d:"1150",c:"6530"},montant:e.montant,refs:["LIFD art. 58","LIA art. 4","LIA art. 13"],risque:"eleve",urgence:"Avant clôture",expert:true}));
+     else F.push(mk({agent:"benefice",impot:"IFD + ICC",kind:"info",planted:"P10",titre:a.v==="marche"?"Honoraires à un proche : pièces à joindre":"Honoraires à un proche : point ouvert",constat:a.v==="marche"?"L’expert confirme un prix de marché. Joindre contrat, facture et rapport de travail : l’écriture est actuellement sans pièce.":"Point laissé en suspens par l’expert. À trancher avant la clôture.",pieces:[`${e.no}`],montant:0,refs:["LIFD art. 58"],risque:a.v==="marche"?"moyen":"eleve",urgence:"Avant clôture",expert:true})); });
+   // Impôt sur le capital
+   const fp=d.capital+d.reservesLeg+d.rac+d.benefReporte; const qc=S.answers.Q_CAPITAL;
+   if(!qc) Q.push({id:"Q_CAPITAL",agent:"benefice",titre:"Impôt sur le capital : paramètre cantonal",texte:`Fonds propres imposables estimés : CHF ${chf(fp)}. Le taux et l’éventuelle imputation de l’impôt sur le bénéfice sur l’impôt sur le capital dépendent du droit cantonal (${S.d.canton}). Ce texte n’est pas dans la base : indiquez le taux applicable ou ignorez ce point.`,refs:["LHID art. 29","LHID art. 30"],input:{label:"Taux de l’impôt sur le capital (‰)",def:""},options:[["taux","Utiliser le taux saisi"],["skip","Ne pas chiffrer (information seulement)"]]});
+   else F.push(mk({agent:"benefice",impot:"Capital (ICC)",kind:"info",titre:"Impôt sur le capital",constat: qc.v==="taux"&&qc.x? `Avec ${String(qc.x).replace(".",",")} ‰ sur CHF ${chf(fp)}, l’impôt sur le capital est estimé à CHF ${chf(fp*qc.x/1000)}. Le canton peut imputer l’impôt sur le bénéfice sur l’impôt sur le capital : à vérifier dans le droit cantonal.` : `Fonds propres imposables CHF ${chf(fp)}. Non chiffré à la demande de l’expert. Une distribution des réserves réduit le capital imposable.`,pieces:["Bilan – fonds propres"],montant:0,refs:["LHID art. 29","LHID art. 30"],risque:"faible",urgence:"Déclaration",expert:true}));
+   return {F,Q};
+ }},
+ { id:"tva", name:"TVA", impot:"TVA", when:d=>d.tva, run(d){
+   const F=[], Q=[];
+   const ni = d.journal.filter(e=>e.tag==="tva_ni");
+   if(ni.length){ const ttc=ni.reduce((a,e)=>a+e.montant,0); const tvaAmt=Math.round(ttc*P.tva.normal/(1+P.tva.normal));
+     F.push(mk({agent:"tva",impot:"TVA",kind:"tva_recup",planted:"P2",titre:"Impôt préalable non récupéré (factures IT)",constat:`${ni.length} factures (TTC CHF ${chf(ttc)}) ont été passées entièrement en charge : la TVA de 8,1 % (CHF ${chf(tvaAmt)}) n’a pas été portée en impôt préalable. Récupérer la TVA réduit la charge, donc augmente un peu le bénéfice imposable : le moteur calcule le gain net.`,pieces:ni.map(e=>`${e.no} · ${e.piece} · CHF ${chf(e.montant)}`),ecriture:{d:"1170",c:"6570"},montant:tvaAmt,refs:["LTVA art. 28","LTVA art. 25"],risque:"faible",urgence:"Décompte TVA"})); }
+   d.immos.filter(i=>i.usagePrive&&!i.partPriveeComptab).forEach(i=>{ const part=Math.round(i.prixAchat*P.vehiculePrive*12); const tvaDue=Math.round(part*P.tva.normal/(1+P.tva.normal));
+     F.push(mk({agent:"tva",impot:"TVA",kind:"tva_cout",planted:"P13",titre:"Part privée du véhicule non comptabilisée",constat:`Véhicule ${i.id} (prix d’achat CHF ${chf(i.prixAchat)}) utilisé à titre privé : part privée annuelle forfaitaire CHF ${chf(part)}, TVA due CHF ${chf(tvaDue)}. La part privée est aussi un élément de salaire de l’actionnaire. C’est un coût, mais il évite un redressement.`,pieces:[`Compte ${i.id}`,"Carnet de bord absent"],ecriture:{d:"6200",c:"2200"},montant:tvaDue,refs:["LTVA art. 31"],ext:[EXT.vehicule],risque:"moyen",urgence:"Décompte TVA"})); });
+   if(d.ca<=P.tdfnSeuil){ const q=S.answers.Q_TDFN;
+     if(!q) Q.push({id:"Q_TDFN",agent:"tva",titre:"Comparaison méthode effective / TDFN",texte:`Le chiffre d’affaires (CHF ${chf(d.ca)}) permet la méthode des taux de la dette fiscale nette. Le taux TDFN dépend de la branche (${d.noga.split(" – ")[0]}) et n’est pas dans la base : indiquez-le pour comparer.`,refs:["LTVA art. 37"],input:{label:"Taux TDFN de la branche (%)",def:""},options:[["taux","Comparer avec le taux saisi"],["skip","Ne pas comparer"]]});
+     else if(q.v==="taux" && q.x){ const ttc=d.ca*(1+P.tva.normal); const dueT=ttc*q.x/100; const dueE=d.tvaCollectee-d.tvaPrealable; const diff=dueE-dueT; const plafond=dueT>108000;
+       F.push(mk({agent:"tva",impot:"TVA",kind:diff>0&&!plafond?"tdfn":"info",titre:plafond?"Méthode TDFN exclue (impôt > 108'000)":diff>0?"La méthode TDFN serait plus avantageuse":"Méthode effective confirmée",constat:`TVA nette méthode effective : CHF ${chf(dueE)}. Méthode TDFN à ${String(q.x).replace(".",",")} % sur CHF ${chf(ttc)} TTC : CHF ${chf(dueT)}. ${plafond?`L’impôt calculé au taux TDFN dépasse CHF 108'000 : la méthode n’est pas ouverte (deuxième condition cumulative).`:diff>0?`Économie annuelle estimée CHF ${chf(diff)} (changement de méthode soumis aux délais de l’AFC).`:`La méthode effective reste meilleure de CHF ${chf(-diff)}.`}`,pieces:["Décomptes TVA 2026"],montant:plafond?0:Math.max(0,diff),refs:["LTVA art. 37","Slides – Introduction générale à la fiscalité (UNIGE, A. Faltin), p. 46"],risque:"moyen",urgence:"Décision de gestion",expert:true})); } }
+   return {F,Q};
+ }},
+ { id:"ia", name:"Impôt anticipé & timbre", impot:"Impôt anticipé", run(d){
+   const F=[], Q=[];
+   const a=d.actionnaire;
+   if(a.ccSolde>0 && a.ccInteret < a.ccSolde*P.interetMinCC){ const I=Math.round(a.ccSolde*P.interetMinCC - a.ccInteret);
+     F.push(mk({agent:"ia",impot:"Impôt anticipé",kind:"interet",planted:"P6",titre:"Avance à l’actionnaire sans intérêt",constat:`Avance de CHF ${chf(a.ccSolde)} sans intérêt. Taux minimum AFC 2026 : 0,75 %, soit un intérêt de CHF ${chf(I)} à facturer. Sans correction, l’intérêt manquant est une prestation appréciable en argent soumise à l’impôt anticipé (brut pour net : CHF ${chf(I*P.iaBrut)}). Coût fiscal faible, risque évité élevé.`,pieces:["Compte 1150 · CA-01"],ecriture:{d:"1150",c:"6950"},montant:I,refs:["Taux d’intérêt AFC 2026","LIA art. 4","LIFD art. 58","Slides – Introduction générale à la fiscalité (UNIGE, A. Faltin), p. 281"],risque:"eleve",urgence:"Avant clôture"})); }
+   if(d.dividendePrevu>0){ const q=S.answers.Q_RAC;
+     if(d.rac>0 && !q) Q.push({id:"Q_RAC",agent:"ia",titre:"Réserves issues d’apports de capital (RAC)",texte:`Un dividende de CHF ${chf(d.dividendePrevu)} est prévu. Le bilan montre CHF ${chf(d.rac)} de RAC. Leur remboursement n’est soumis ni à l’impôt anticipé ni à l’impôt sur le revenu, à condition que les RAC soient confirmées par l’AFC.`,refs:["LIA art. 5","LIFD art. 20"],options:[["oui","RAC annoncées et confirmées par l’AFC (formulaire 170)"],["non","Pas encore confirmées"]]});
+     else if(d.rac>0){ const racUse=Math.min(d.rac,d.dividendePrevu);
+       F.push(mk({agent:"ia",impot:"Actionnaire (PP)",kind:"pp",planted:"P14",ppFactor:P.partielIFD,titre:"Distribuer d’abord les réserves issues d’apports de capital",constat:`Sur le dividende prévu de CHF ${chf(d.dividendePrevu)}, CHF ${chf(racUse)} peuvent être versés par remboursement de RAC : pas d’impôt anticipé de 35 % (CHF ${chf(racUse*P.ia)} de trésorerie préservée) et pas d’impôt sur le revenu chez l’actionnaire sur cette part. ${q.v==="non"?"Condition : faire confirmer les RAC par l’AFC avant la distribution.":""} Gain estimé sur la part imposable (${pct(P.partielIFD,0)}) au taux marginal saisi.`,pieces:["Compte 2950","Procès-verbal AG (projet)"],ecriture:null,montant:racUse,refs:["LIA art. 5","LIFD art. 20"],risque:q.v==="oui"?"faible":"moyen",urgence:"Décision AG",expert:true})); }
+     F.push(mk({agent:"ia",impot:"Impôt anticipé",kind:"info",titre:"Impôt anticipé sur le dividende ordinaire",constat:`Le solde du dividende (CHF ${chf(Math.max(0,d.dividendePrevu-(q&&d.rac>0?Math.min(d.rac,d.dividendePrevu):0)))}) supporte 35 % d’impôt anticipé, à déclarer et payer dans les 30 jours (formulaire 103). L’actionnaire étant une personne physique, la procédure de déclaration n’est pas ouverte.`,pieces:["Projet de distribution"],montant:0,refs:["LIA art. 13","LIA art. 20"],risque:"faible",urgence:"Décision AG"})); }
+   // Droit de timbre : texte LT absent de la base → aucune proposition
+   F.push(mk({agent:"ia",impot:"Droit de timbre",kind:"info",titre:"Droit de timbre d’émission (franchise 1 mio)",constat:"Contrôle prévu par le catalogue (LT art. 5–6). La loi sur les droits de timbre n’est pas chargée dans la base.",pieces:["Historique des apports"],montant:0,refs:["LT art. 5"],risque:"faible",urgence:"—"}));
+   return {F,Q};
+ }},
+ { id:"pp", name:"Actionnaire-dirigeant (PP)", impot:"Actionnaire (PP)", run(d){
+   const F=[], Q=[]; const a=d.actionnaire; const q=S.answers.Q_TMARG;
+   if(!q){ Q.push({id:"Q_TMARG",agent:"pp",titre:"Taux marginal de l’actionnaire",texte:`Pour chiffrer les pistes personne physique, le moteur a besoin du taux marginal d’imposition de ${a.nom} (IFD + ICC + impôt communal). Il dépend de sa situation personnelle (état civil, commune, autres revenus) et n’est pas dans le dossier.`,refs:["LIFD art. 33"],input:{label:"Taux marginal estimé (%)",def:"30"},options:[["taux","Utiliser ce taux"]]}); return {F,Q}; }
+   if(a.p3aVerse<P.p3a){ const m=P.p3a-a.p3aVerse; F.push(mk({agent:"pp",impot:"Actionnaire (PP)",kind:"pp",planted:"P15",titre:"Pilier 3a non versé",constat:`Versement 3a de CHF ${chf(m)} encore possible pour 2026 (plafond CHF ${chf(P.p3a)}), déductible du revenu. À verser avant le 31 décembre.`,pieces:["Attestation 3a"],montant:m,refs:["LIFD art. 33","Pilier 3a 2026 (OFAS)"],risque:"faible",urgence:"Avant le 31.12"})); }
+   if(a.lppRachat>0) F.push(mk({agent:"pp",impot:"Actionnaire (PP)",kind:"pp",titre:"Rachat LPP possible",constat:`Potentiel de rachat de CHF ${chf(a.lppRachat)} selon le certificat LPP, déductible du revenu. Aucun retrait en capital n’est possible dans les 3 ans suivant le rachat. Montant à ajuster selon la trésorerie de l’actionnaire.`,pieces:["Certificat LPP 2026"],montant:a.lppRachat,refs:["LIFD art. 33"],ext:[EXT.lpp],risque:"faible",urgence:"Avant le 31.12"}));
+   const C=50000, r=rate(), t=q.t; const salNet=C/(1+P.avsEmp+P.acEmp)*(1-P.avsEmp-P.acEmp)*(1-t); const divNet=C*(1-r)*(1-P.partielIFD*t); const best=divNet>salNet?"dividende":"salaire";
+   F.push(mk({agent:"pp",impot:"Actionnaire (PP)",kind:"info",titre:`Arbitrage salaire / dividende : avantage ${best}`,constat:`Pour CHF ${chf(C)} de coût avant impôts pour la société : en salaire, l’actionnaire garde ≈ CHF ${chf(salNet)} (charges sociales 2 × ${pct(P.avsEmp+P.acEmp,1)} puis impôt ${pct(t,0)}). En dividende, ≈ CHF ${chf(divNet)} (impôt sur le bénéfice ${pct(r,1)}, puis imposition partielle ${pct(P.partielIFD,0)} au taux ${pct(t,0)}). Le salaire doit rester conforme au marché : un salaire trop bas peut être requalifié par l’AVS. Taux cantonal d’imposition partielle à confirmer.`,pieces:["Fiche de salaire","Projet de dividende"],montant:0,refs:["LIFD art. 20","LIFD art. 18","Cotisations AVS 2026 (OFAS)"],risque:"moyen",urgence:"Décision de gestion"}));
+   return {F,Q};
+ }}
+];
+
+/* ================== ORCHESTRATION ================== */
+async function startAnalysis(){
+  S.fiches=[]; S.ecartees=[]; S.log=[]; FID=0;
+  S.run = { state:"running", agents: AGENTS.filter(a=>!a.when||a.when(S.d)).map(a=>({id:a.id,name:a.name,p:0,st:"attente",n:0})).concat([{id:"revue",name:"Revue IA des écritures",p:0,st:"attente",n:0},{id:"controleur",name:"Agent contrôleur",p:0,st:"attente",n:0}]), idx:0, pending:null };
+  audit("Moteur","Analyse lancée",`${S.d.nom} · ${S.d.canton} · ${S.d.exercice}`);
+  log(`Orchestrateur : profil ${S.d.forme} ${S.d.canton}, TVA ${S.d.tva?"oui":"non"} → ${S.run.agents.length} agents`);
+  render(); await continueRun();
+}
+async function continueRun(){
+  const R=S.run; if(!R) return;
+  R.state="running"; render();
+  while(R.idx<R.agents.length){
+    const A=R.agents[R.idx]; A.st="en cours";
+    for(let p=10;p<=80;p+=35){ A.p=p; paintRun(); await sleep(170); }
+    if(A.id==="revue"){ await runAIReview(A); if(R.state==="paused") return; }
+    else if(A.id==="controleur"){ runController(A); }
+    else {
+      const ag=AGENTS.find(x=>x.id===A.id); const {F,Q}=ag.run(S.d);
+      S.fiches=S.fiches.filter(f=>f.agent!==A.id).concat(F); A.n=F.length;
+      log(`${A.name} : ${F.length} fiche(s)${Q.length?`, ${Q.length} question(s) pour l’expert`:""}`);
+      if(Q.length){ A.st="en pause"; A.p=85; R.state="paused"; R.pending=Q[0]; paintRun(); audit("Moteur","Analyse suspendue – question à l’expert",Q[0].titre); openQuestion(Q[0]); return; }
+    }
+    A.p=100; A.st="terminé"; R.idx++; paintRun();
+  }
+  R.state="done"; S.maxStep=Math.max(S.maxStep,4);
+  S.fiches.sort((a,b)=>gainOf(b).total-gainOf(a).total || rk(b.risque)-rk(a.risque));
+  log(`Analyse terminée : ${S.fiches.length} fiches, ${S.ecartees.length} écartée(s) faute de base légale`);
+  audit("Moteur","Analyse terminée",`${S.fiches.length} fiches`);
+  render();
+}
+const rk = r => ({faible:1,moyen:2,eleve:3}[r]||0);
+function runController(A){
+  const keep=[], seen=new Set();
+  for(const f of S.fiches){
+    const okRefs=f.refs.filter(refExists);
+    if(!okRefs.length){ S.ecartees.push({...f,motif:`Aucune base légale retrouvée dans la base (${f.refs.join(", ")})`}); log(`Contrôleur : « ${f.titre} » écartée, source absente de la base`); continue; }
+    f.refs=okRefs;
+    const key=f.titre+"|"+f.montant; if(seen.has(key)){ log(`Contrôleur : doublon supprimé « ${f.titre} »`); continue; } seen.add(key);
+    keep.push(f);
+  }
+  S.fiches=keep; A.n=keep.length; log(`Contrôleur : ${keep.length} fiches conservées, chaque fiche a une pièce, un article et un calcul`);
+}
+
+/* ---------- Revue IA (pseudonymisée) ---------- */
+async function runAIReview(A){
+  const covered=new Set(); S.fiches.forEach(f=>(f.pieces||[]).forEach(p=>{ const m=String(p).match(/2026-\d{4}/); if(m) covered.add(m[0]); }));
+  S.d.journal.filter(e=>e.tag).forEach(e=>covered.add(e.no));
+  const rest=S.d.journal.filter(e=>!covered.has(e.no) && /^[5-8]/.test(e.debit));
+  const already=S.run.aiQ||[];
+  if(already.length){ // questions IA déjà posées : traiter les réponses
+    S.fiches=S.fiches.filter(f=>f.agent!=="revue");
+    for(const q of already){ const a=S.answers[q.id]; if(!a){ S.run.state="paused"; S.run.pending=q; A.st="en pause"; paintRun(); openQuestion(q); return; }
+      if(a.v==="prive"||a.v==="partiel"){ const e=S.d.journal.find(x=>x.no===q.no); S.fiches.push(mk({agent:"revue",impot:"IFD + ICC",kind:"reprise",titre:`Reprise après revue IA : ${e.libelle}`,constat:`Signalée par la revue IA (${q.motif}). Réponse de l’expert : ${a.v==="prive"?"privé":"usage mixte, 50 %"}.`,pieces:[`${e.no} · ${e.piece||"sans pièce"}`],ecriture:{d:"1150",c:e.debit},montant:a.v==="prive"?e.montant:e.montant/2,refs:q.refs,risque:"moyen",urgence:"Avant clôture",expert:true})); }
+    }
+    A.n=already.length; return;
+  }
+  if(REMOTE && !getCode()){ log("Revue IA : code d’accès non saisi → analyse déterministe seule"); A.n=0; return; }
+  await ensureAI();
+  if(!AI){ log("Revue IA : inactive (page ouverte sans compte Claude connecté) → analyse déterministe seule"); A.n=0; return; }
+  if(!rest.length){ log("Revue IA : aucune écriture non couverte"); return; }
+  const pm=pseudoMap();
+  const lines=rest.map(e=>`${e.no} | ${e.date} | D ${e.debit} ${ACCOUNTS[e.debit]||""} / C ${e.credit} | CHF ${e.montant} | ${pseudo(e.libelle,pm)} | pièce: ${e.piece||"AUCUNE"} | tiers: ${pm[e.tiers]||"—"}`).join("\n");
+  const ex=["LIFD art. 58","LIFD art. 59","LTVA art. 31"].map(kbByRef).filter(Boolean);
+  const src=ex.map((c,i)=>`[S${i+1}] ${c.ref}\n${c.text.slice(0,1400)}`).join("\n\n");
+  log(`Revue IA : envoi de ${rest.length} écritures pseudonymisées (${Object.keys(pm).length} tiers remplacés par des identifiants)`);
+  const prompt=`Tu es l'agent « Revue des écritures » de HelvetiaTax IA (pré-clôture, PME ${S.d.forme}, canton ${S.d.canton}, exercice ${S.d.exercice}).
+Tâche : parmi les écritures ci-dessous (données pseudonymisées), signale au plus 3 écritures dont le caractère commercial est DOUTEUX (dépense possiblement privée, sans pièce, ou sans lien évident avec l'activité de conseil).
+Contraintes : n'utilise QUE les extraits [S1..S${ex.length}] comme base légale ; ne calcule aucun impôt ; si rien n'est douteux, renvoie [].
+Réponds uniquement par un tableau JSON : [{"no":"2026-xxxx","motif":"…(une phrase)","question":"question précise à poser à l'expert","sources":["S1"]}]
+
+ÉCRITURES :
+${lines}
+
+EXTRAITS :
+${src}`;
+  try{
+    const out=await AI.json(prompt,{modelTier:"default"});
+    const valid=(Array.isArray(out)?out:[]).filter(o=>o&&rest.some(e=>e.no===o.no)&&Array.isArray(o.sources)&&o.sources.some(s=>/^S\d+$/.test(s)&&ex[+s.slice(1)-1])).slice(0,3);
+    const rejected=(Array.isArray(out)?out.length:0)-valid.length;
+    if(rejected>0) log(`Revue IA : ${rejected} signalement(s) rejeté(s) faute de source valide`);
+    S.run.aiQ=valid.map(o=>{ const e=rest.find(x=>x.no===o.no); return {id:"QAI_"+o.no,no:o.no,agent:"revue",ai:true,motif:o.motif,titre:"Doute signalé par la revue IA",texte:`${e.no} « ${e.libelle} » (CHF ${chf(e.montant)}). ${o.motif}\n\nQuestion de l’IA : ${o.question}`,refs:o.sources.map(s=>ex[+s.slice(1)-1]?.ref).filter(Boolean),options:[["commercial","Justifié par l’usage commercial"],["prive","Dépense privée : à reprendre"],["partiel","Mixte : reprendre 50 %"]]}; });
+    log(`Revue IA : ${S.run.aiQ.length} doute(s) → questions à l’expert`); audit("IA","Revue des écritures",`${S.run.aiQ.length} doute(s)`);
+    if(S.run.aiQ.length) return runAIReview(A);
+  }catch(e){ log(`Revue IA : ${errText(e)} → analyse déterministe seule`); if(e.code==="not_granted"||e.code==="sampling_disabled") AI=null; }
+}
+function pseudo(s,pm){ let o=s; Object.keys(pm).forEach(n=>{ o=o.split(n).join(pm[n]); const last=n.split(" ").pop(); if(last.length>3) o=o.split(last).join(pm[n]); }); return o; }
+function errText(e){ if(e&&e.code==="bad_code"){ setTimeout(()=>askCode("Code d’accès manquant ou incorrect. Saisissez le bon code."),50); } return ({bad_code:"code d’accès manquant ou incorrect",empty_completion:"réponse vide, réessayez",not_granted:"accès à Claude refusé",rate_limited:"trop de requêtes, réessayez plus tard",sampling_disabled:"Claude indisponible pour ce compte",invalid_json:"réponse illisible",cancelled:"arrêté",session_expired:"session expirée"})[e?.code]||"erreur temporaire"; }
+
+/* ================== QUESTIONS À L'EXPERT ================== */
+function openQuestion(q){
+  const refs=(q.refs||[]).map(refChip).join("");
+  showModal(`<div class="hd"><div><span class="pill p-warn">Analyse suspendue</span><h2 id="modalTitle" style="margin-top:8px">${esc(q.titre)}</h2></div></div>
+  <div class="bd"><p style="white-space:pre-wrap">${esc(q.texte)}</p>${refs?`<div><div class="hint" style="margin-bottom:5px">Base légale</div><div class="refs">${refs}</div></div>`:""}
+  ${q.input?`<label class="f"><span>${esc(q.input.label)}</span><input type="number" step="0.01" id="qx" value="${esc(q.input.def)}"></label>`:""}
+  <div class="opts">${q.options.map((o,i)=>`<label class="opt"><input type="radio" name="qo" value="${esc(o[0])}" ${i===0?"checked":""}><span>${esc(o[1])}</span></label>`).join("")}</div>
+  <label class="f"><span>Commentaire (journal d’audit)</span><input type="text" id="qc" placeholder="Facultatif"></label>
+  <p class="hint">Rôle : expert fiscal ou comptable. La réponse est enregistrée dans le journal d’audit, puis l’analyse reprend.</p></div>
+  <div class="ft"><button class="btn primary" id="qok" type="button">Répondre et reprendre l’analyse</button></div>`, false);
+  bindRefChips($("#modal"));
+  $("#qok").onclick=()=>{ const v=document.querySelector('input[name="qo"]:checked').value; const xv=$("#qx")?parseFloat($("#qx").value):null;
+    if(q.input && v!=="skip" && (xv==null||isNaN(xv))){ $("#qx").focus(); return; }
+    const a={v, x:xv, c:$("#qc").value}; if(q.id==="Q_TMARG") a.t=xv/100;
+    S.answers[q.id]=a; audit("Expert",`Réponse : ${q.options.find(o=>o[0]===v)[1]}${xv!=null&&!isNaN(xv)?` (${xv})`:""}`,q.titre+(a.c?` · ${a.c}`:""));
+    log(`Expert : « ${q.titre} » → ${q.options.find(o=>o[0]===v)[1]}`); closeModal(); S.run.pending=null; continueRun(); };
+}
+
+
+/* ================== MODE AUTONOME (serveur HelvetiaTax) ================== */
+const REMOTE = (window.HTX_CONFIG && window.HTX_CONFIG.apiUrl) ? window.HTX_CONFIG.apiUrl : null;
+const getCode = () => { try{ return localStorage.getItem("htx-code")||""; }catch(e){ return ""; } };
+function makeRemoteAI(url){
+  const call = async (input, opts={}) => {
+    const messages = typeof input==="string" ? [{role:"user",content:input}] : input;
+    let r;
+    try{ r = await fetch(url,{method:"POST",headers:{"content-type":"application/json","x-access-code":getCode()},body:JSON.stringify({messages}),signal:opts.signal}); }
+    catch(e){ throw {code:e&&e.name==="AbortError"?"cancelled":"upstream_error"}; }
+    if(r.status===401) throw {code:"bad_code"};
+    if(r.status===429) throw {code:"rate_limited"};
+    if(!r.ok) throw {code:"upstream_error"};
+    const j = await r.json(); const text = j.text||"";
+    if(!text.trim()) throw {code:"empty_completion"};
+    if(opts.onText) opts.onText({text,delta:text});
+    return {text, truncated:!!j.truncated};
+  };
+  call.json = async (input, opts={}) => {
+    const {text} = await call(input+"\n\nRéponds uniquement avec la valeur JSON demandée, sans aucun texte autour.", opts);
+    const m = text.match(/[\[{][\s\S]*[\]}]/);
+    try{ return JSON.parse(m?m[0]:text); }catch(e){ throw {code:"invalid_json",text}; }
+  };
+  return call;
+}
+const LOCAL_DL = { save: async ({filename,data}) => { const blob = data instanceof Blob ? data : new Blob([data],{type:/\.csv$/.test(filename)?"text/csv":"text/plain"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500); return {status:"saved"}; } };
+function askCode(msg){
+  showModal(`<div class="hd"><div><h2 id="modalTitle">Code d’accès HelvetiaTax IA</h2><div class="hint">${esc(msg||"Saisissez le code fourni par l’équipe pour activer l’IA.")}</div></div><button class="btn sm" id="mclose" type="button">Fermer</button></div>
+  <div class="bd"><label class="f"><span>Code d’accès</span><input type="text" id="codeIn" value="${esc(getCode())}" autocomplete="off"></label><p class="hint">Le code est gardé uniquement dans ce navigateur.</p></div>
+  <div class="ft"><button class="btn primary" id="codeOk" type="button">Activer l’IA</button></div>`);
+  $("#codeIn").focus();
+  $("#codeOk").onclick=()=>{ const v=$("#codeIn").value.trim(); if(!v){ $("#codeIn").focus(); return; } try{ localStorage.setItem("htx-code",v); }catch(e){} closeModal(); paintAIChip(); };
+}
+
+/* ================== IA : explications et assistant ================== */
+async function ensureAI(){ if(REMOTE){ if(!AI) AI=makeRemoteAI(REMOTE); if(!getCode()){ askCode(); return null; } return AI; } if(AI) return AI; try{ if(window.claude) AI=await claude.use("sample"); }catch(e){ AI=null; } paintAIChip(); return AI; }
+function paintAIChip(){ const c=$("#chipAI"); if(!c) return; if(REMOTE){ c.innerHTML=getCode()?`IA <b>active</b>`:`IA <b>verrouillée</b> · saisir le code`; c.style.cursor="pointer"; c.onclick=()=>askCode(); return; } c.innerHTML=AI?`IA <b>active</b>`:`IA <b>inactive</b> · connectez-vous à Claude`; }
+const NOAI= (window.HTX_CONFIG&&window.HTX_CONFIG.apiUrl) ? `Saisissez le code d’accès (en haut, « IA verrouillée ») pour activer l’IA. Les fiches, elles, restent calculées par le moteur.` : `L’IA n’est pas configurée sur ce site : l’adresse du serveur (fichier config.js) est vide. Les fiches, elles, restent calculées par le moteur.`;
+const RULES = `Tu es HelvetiaTax IA, copilote fiscal de pré-clôture pour PME suisses, au service d'un expert fiscal ou comptable.
+Règles impératives :
+1. Réponds UNIQUEMENT à partir des extraits numérotés [S1], [S2]… fournis. Chaque affirmation juridique, taux ou montant doit citer son extrait entre crochets, ex. [S2].
+2. Si les extraits ne permettent pas de répondre, écris exactement AUCUNE_SOURCE sur la première ligne, puis en une phrase le document qui manque. N'invente rien.
+3. Ne calcule jamais toi-même un impôt : reprends seulement les montants fournis par le moteur.
+4. Si un point dépend d'un fait que tu ne connais pas, termine par une ligne commençant par QUESTION_EXPERT: suivie de la question à poser.
+5. Optimisation légale uniquement ; signale tout risque de prestation appréciable en argent ou d'évasion fiscale.
+6. Français, ton professionnel, 180 mots maximum, sans titres.`;
+function sourcesBlock(list){ return list.map((c,i)=>`[S${i+1}] ${c.ref}${c.src&&c.type!=="loi"?` (${c.src})`:""}\n${c.text.slice(0,1500)}`).join("\n\n"); }
+function renderAI(text, list){
+  const t=text.trim();
+  if(/^AUCUNE_SOURCE/.test(t)) return {html:`<div class="aibox none"><b>Pas de réponse : aucune source dans la base.</b>\n${esc(t.replace(/^AUCUNE_SOURCE\s*/,""))}</div>`, ok:false};
+  const used=[...new Set([...t.matchAll(/\[S(\d+)\]/g)].map(m=>+m[1]))].filter(n=>list[n-1]);
+  if(!used.length) return {html:`<div class="aibox none"><b>Réponse bloquée : l’IA n’a cité aucune source.</b> HelvetiaTax n’affiche pas de réponse non sourcée.</div>`, ok:false};
+  let body=esc(t).replace(/\[S(\d+)\]/g,(m,n)=>list[n-1]?`<button class="ref" data-ref="${esc(list[n-1].ref)}" data-id="${esc(list[n-1].id)}" type="button">${esc(list[n-1].ref)}</button>`:"");
+  body=body.replace(/QUESTION_EXPERT:\s*(.*)/,`</div><div class="qbox"><b>Question de l’IA à l’expert</b><span>$1</span></div><div>`);
+  return {html:`<div class="aibox">${body}</div>`, ok:true, used};
+}
+async function explainFiche(f, btn){
+  const box=$("#ai-"+f.id); if(!(await ensureAI())){ box.innerHTML=`<div class="aibox none"><b>IA inactive.</b> ${NOAI}</div>`; S.aiNotes[f.id]=box.innerHTML; return; }
+  btn.disabled=true; box.innerHTML=`<div class="aibox">Recherche des sources et rédaction…</div>`;
+  const list=[...f.refs.map(kbByRef).filter(Boolean), ...search(f.titre+" "+f.constat,4).filter(c=>!f.refs.includes(c.ref))].slice(0,6);
+  const g=gainOf(f);
+  const prompt=`${RULES}
+
+FICHE D'OPTIMISATION (calculée par le moteur déterministe, canton ${S.d.canton}, taux effectif ${pct(rate())}) :
+Titre : ${f.titre}
+Constat : ${f.constat}
+Montant : CHF ${chf(f.montantAjuste??f.montant)} ; effet total estimé : CHF ${chf(g.total)}
+Risque : ${f.risque} ; urgence : ${f.urgence}
+
+DEMANDE DE L'EXPERT : explique pourquoi cette proposition est (ou n'est pas) admissible, ce qu'il faut documenter, et la limite du raisonnement.
+
+EXTRAITS :
+${sourcesBlock(list)}`;
+  try{ let last=""; await AI(prompt,{onText:({text})=>{ last=text; box.innerHTML=`<div class="aibox">${esc(text)}</div>`; }});
+    const r=renderAI(last,list); box.innerHTML=r.html; S.aiNotes[f.id]=r.html; bindRefChips(box); audit("IA","Explication fournie",f.id+(r.ok?"":" (sans source → bloquée)")); }
+  catch(e){ box.innerHTML=`<div class="aibox none">${esc(errText(e))}</div>`; if(e.code==="not_granted") AI=null; }
+  finally{ btn.disabled=false; }
+}
+let chatCtl=null;
+async function sendChat(){
+  const q=$("#chatIn").value.trim(); if(!q) return; $("#chatIn").value="";
+  S.chat.push({role:"user",content:q}); paintChat();
+  const list=search(q,6);
+  if(!list.length){ S.chat.push({role:"assistant",content:"AUCUNE_SOURCE\nAucun extrait de la base ne correspond à cette question.",list:[]}); paintChat(); return; }
+  if(!(await ensureAI())){ S.chat.push({role:"assistant",content:"AUCUNE_SOURCE\n"+NOAI+" En attendant, le bouton « Base juridique » donne accès directement aux textes.",list:[]}); paintChat(); return; }
+  const ctx=`Dossier : ${S.d.nom}, ${S.d.forme}, canton ${S.d.canton}, exercice ${S.d.exercice}, bénéfice avant impôts CHF ${chf(S.d.bai)}. Fiches actuelles : ${S.fiches.slice(0,8).map(f=>f.titre).join(" ; ")||"aucune"}.`;
+  const turns=[{role:"user",content:RULES+"\n\n"+ctx},...S.chat.slice(-6,-1).map(m=>({role:m.role,content:m.role==="assistant"?m.content.slice(0,1200):m.content})),{role:"user",content:`QUESTION : ${q}\n\nEXTRAITS :\n${sourcesBlock(list)}`}];
+  const pend={role:"assistant",content:"",list,streaming:true}; S.chat.push(pend); paintChat();
+  chatCtl=new AbortController(); $("#chatStop").disabled=false; $("#chatState").textContent="Réflexion…";
+  try{ const {text}=await AI(turns,{cache:false,signal:chatCtl.signal,onText:({text})=>{ pend.content=text; $("#chatState").textContent="Rédaction…"; paintChat(); }}); pend.content=text; }
+  catch(e){ pend.content=(e.text||"")+(e.code==="cancelled"?"":`\n\n(${errText(e)})`); if(e.code==="not_granted") AI=null; }
+  finally{ pend.streaming=false; chatCtl=null; $("#chatStop").disabled=true; $("#chatState").textContent=""; paintChat(); audit("IA","Réponse de l’assistant",q.slice(0,60)); }
+}
+function paintChat(){
+  const L=$("#chatLog");
+  if(!S.chat.length){ L.innerHTML=`<div class="hint">Posez une question sur le dossier ou le droit fiscal. L’assistant cherche d’abord dans la base (${KB.length} extraits : LIFD, LHID, LIA, LTVA, cours, examens corrigés, paramètres 2026), puis ne répond qu’avec ces sources.</div>
+  <div class="row">${["Quelles provisions sont admises ?","Délai pour reporter une perte ?","Qu’est-ce qu’une prestation appréciable en argent ?"].map(s=>`<button class="btn sm" data-s="${esc(s)}" type="button">${esc(s)}</button>`).join("")}</div>`;
+    L.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{ $("#chatIn").value=b.dataset.s; sendChat(); }); return; }
+  L.innerHTML=S.chat.map(m=>{ if(m.role==="user") return `<div class="msg u">${esc(m.content)}</div>`;
+    if(m.streaming) return `<div class="msg a">${esc(m.content||"Recherche dans la base…")}</div>`;
+    return renderAI(m.content,m.list||[]).html; }).join("");
+  bindRefChips(L); L.scrollTop=L.scrollHeight;
+}
+
+/* ================== UI : COMPOSANTS ================== */
+function refChip(ref){ const c=kbByRef(ref); return c?`<button class="ref" type="button" data-ref="${esc(ref)}" data-id="${esc(c.id)}">${esc(ref)}</button>`:`<span class="ref ext" title="Absent de la base">${esc(ref)}</span>`; }
+function bindRefChips(root){ root.querySelectorAll("button.ref").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const c=KB.find(x=>x.id===b.dataset.id)||kbByRef(b.dataset.ref); if(c) showSource(c); }); }
+function showSource(c){
+  const back = (!modalClosable && S.run && S.run.pending) ? S.run.pending : null;
+  showModal(`<div class="hd"><div><span class="pill ${c.type==="loi"?"p-acc":"p-neutral"}">${{loi:"Texte légal",cours:"Cours",examen:"Examen corrigé",projet:"Document de groupe",param:"Paramètre 2026"}[c.type]}</span><h2 id="modalTitle" style="margin-top:8px">${esc(c.ref)}</h2><div class="hint">${esc(c.src)}</div></div><button class="btn sm" type="button" id="mclose">Fermer</button></div>
+  <div class="bd"><div class="src-text">${esc(c.text)}</div>${c.url?`<a href="${esc(c.url)}" target="_blank" rel="noopener">Ouvrir la source en ligne</a>`:""}</div>`, !back);
+  if(back){ $("#mclose").textContent="Retour à la question"; $("#mclose").onclick=()=>openQuestion(back); }
+}
+let modalClosable=true;
+function showModal(html, closable=true){ modalClosable=closable; $("#modal").innerHTML=html; $("#modal").classList.add("on"); $("#scrim").classList.add("on"); const c=$("#mclose"); if(c) c.onclick=closeModal; }
+function closeModal(){ $("#modal").classList.remove("on"); if(!$("#drawer").classList.contains("on")) $("#scrim").classList.remove("on"); }
+function openKB(){
+  showModal(`<div class="hd"><div><h2 id="modalTitle">Base juridique et documentaire</h2><div class="hint">${KB.length} extraits · ${KB.filter(c=>c.type==="loi").length} articles de loi (LTVA, LIFD, LHID, LIA – recueil 2025) · cours, examens corrigés, documents du groupe, paramètres 2026 datés</div></div><button class="btn sm" type="button" id="mclose">Fermer</button></div>
+  <div class="bd"><input type="text" id="kbq" placeholder="Rechercher : ducroire, LIFD art. 67, apports de capital…"><div id="kbres" class="hint">Saisissez au moins 3 caractères.</div></div>`);
+  const run=()=>{ const q=$("#kbq").value; if(q.length<3){ $("#kbres").innerHTML=`<span class="hint">Saisissez au moins 3 caractères.</span>`; return; } const r=search(q,12);
+    $("#kbres").innerHTML=r.length?r.map(c=>`<div class="kbhit"><b>${esc(c.ref)}</b> <span class="hint">· ${esc(c.type==="loi"?c.title:c.src)}</span><p>${esc(c.text.slice(0,420))}</p><button class="btn sm" data-id="${esc(c.id)}" type="button">Lire l’extrait</button></div>`).join(""):`<span class="hint">Aucun extrait trouvé.</span>`;
+    $("#kbres").querySelectorAll("[data-id]").forEach(b=>b.onclick=()=>showSource(KB.find(x=>x.id===b.dataset.id))); };
+  $("#kbq").oninput=run; $("#kbq").focus();
+}
+
+/* ================== RENDU ================== */
+const STEPS=[["Cadrage","Profil et imports"],["Contrôle","Données et intégrité"],["Analyse","Agents par impôt"],["Validation","Fiches d’optimisation"],["Résultats","Synthèse et export"]];
+function render(){
+  $("#steps").innerHTML=STEPS.map((s,i)=>`<button class="step ${S.step===i+1?"on":""} ${i+1<S.maxStep&&S.step!==i+1?"done":""}" data-s="${i+1}" ${i+1>S.maxStep?"disabled":""} type="button"><span class="n">${i+1}</span><span><b>${s[0]}</b><small>${s[1]}</small></span></button>`).join("");
+  $("#steps").querySelectorAll(".step").forEach(b=>b.onclick=()=>{ S.step=+b.dataset.s; render(); window.scrollTo(0,0); });
+  const c=canton(S.d.canton);
+  $("#chipDossier").innerHTML=`Dossier <b>${esc(S.d.nom)}</b>`; $("#chipCanton").innerHTML=`Canton <b>${esc(c.code)}</b> · ${pct(c.rate)}`; paintAIChip();
+  $("#view").innerHTML=[vCadrage,vControle,vAnalyse,vValidation,vResultats][S.step-1]();
+  ({1:bCadrage,2:bControle,3:bAnalyse,4:bValidation,5:bResultats})[S.step]();
+  bindRefChips($("#view"));
+  $("#foot").innerHTML=`Prototype de cours (MScCCF, UNIGE) · Règles ${RULES_VERSION} · Données d’exemple fictives · Ne remplace ni la déclaration ni le conseil fiscal : le professionnel valide et reste responsable.`;
+}
+const field=(id,label,val,type="text",src="",attrs="")=>`<label class="f"><span>${esc(label)}${src?`<em>${esc(src)}</em>`:""}</span><input type="${type}" id="${id}" value="${esc(val)}" ${attrs}></label>`;
+const sel=(id,label,val,opts,src="")=>`<label class="f"><span>${esc(label)}${src?`<em>${esc(src)}</em>`:""}</span><select id="${id}">${opts.map(o=>{ const [v,t]=Array.isArray(o)?o:[o,o]; return `<option value="${esc(v)}" ${String(v)===String(val)?"selected":""}>${esc(t)}</option>`; }).join("")}</select></label>`;
+
+function vCadrage(){
+  const d=S.d, a=d.actionnaire, c=canton(d.canton), pack=CANTON_PACKS[d.canton];
+  return `<div class="lead"><div><h1>1. Cadrage du dossier</h1><p>Renseignez le profil de la société et importez les pièces. Le canton choisi ici reçoit l’analyse détaillée ; les autres cantons ne sont comparés qu’en estimation, à la fin.</p></div>
+  <div class="row"><button class="btn" id="bDemo" type="button">Recharger l’exemple</button><button class="btn" id="bEmpty" type="button">Dossier vide</button></div></div>
+  <div class="banner">Exemple chargé : <b>${esc(d.nom)}</b> (société fictive), grand livre de test avec ${d.planted.length} erreurs placées volontairement pour évaluer le prototype.</div>
+  <section class="card"><div class="hd"><div class="sec-title"><span class="ix">1.a</span><h2>Identité de l’entreprise</h2></div></div><div class="bd grid g3">
+    ${field("f_nom","Raison sociale",d.nom,"text","Registre du commerce (Zefix)")}
+    ${sel("f_forme","Forme juridique",d.forme,["SA","Sàrl","Coopérative"],"CO · cours 2–4")}
+    ${sel("f_structure","Siège, filiale ou holding",d.structure,["Siège","Filiale","Holding"],"LIFD · LHID")}
+    ${sel("f_canton","Canton de base (analyse détaillée)",d.canton,CANTONS.slice().sort((x,y)=>x.name.localeCompare(y.name,"fr")).map(k=>[k.code,`${k.name} (${k.code})`]),"Registre du commerce")}
+    ${field("f_commune","Commune du siège",d.commune)}
+    ${field("f_creation","Année de création",d.creation,"number","Zefix")}
+    ${field("f_effectif","Nombre d’employés",d.effectif,"number","Décompte AVS · OFS")}
+    ${field("f_noga","Secteur d’activité",d.noga,"text","NOGA 2025")}
+    ${field("f_exercice","Exercice analysé",d.exercice,"number")}
+  </div><div class="bd" style="padding-top:0">${pack?`<div class="banner">Règles cantonales détaillées disponibles pour ${esc(c.name)} (${esc(pack.law)}). Taux effectif ${pct(c.rate)} (source : ${refChip(pack.rateSrc)}).</div>`:`<div class="banner warn">Pour ${esc(c.name)}, le moteur applique les règles fédérales harmonisées (LIFD, LHID) et le taux effectif paramétré ${pct(c.rate)} (${refChip("Taux cantonaux 2026 (KPMG)")}). Les règles propres au canton ne sont pas dans la base : elles seront posées à l’expert pendant l’analyse.</div>`}</div></section>
+  <section class="card"><div class="hd"><div class="sec-title"><span class="ix">1.b</span><h2>Chiffres clés</h2></div></div><div class="bd grid g4">
+    ${field("f_ca","Chiffre d’affaires (CHF)",d.ca,"number","CO art. 957")}
+    ${field("f_bai","Bénéfice avant impôts (CHF)",d.bai,"number","LIFD art. 58")}
+    ${field("f_capital","Capital-actions (CHF)",d.capital,"number","CO")}
+    ${field("f_rac","Réserves issues d’apports de capital (CHF)",d.rac,"number","LIA art. 5")}
+    ${field("f_resleg","Réserves légales (CHF)",d.reservesLeg,"number")}
+    ${field("f_benrep","Bénéfice reporté (CHF)",d.benefReporte,"number")}
+    ${field("f_div","Dividende prévu (CHF)",d.dividendePrevu,"number")}
+    ${field("f_deb","Débiteurs suisses (CHF)",d.debiteursCH,"number")}
+  </div>
+  <div class="bd" style="padding-top:0"><h3 style="margin-bottom:8px">Pertes reportées par année d’origine</h3><div class="tablewrap"><table><thead><tr><th>Année</th><th class="n">Perte</th><th class="n">Déjà imputée</th><th>Échéance (7 ans)</th></tr></thead><tbody>
+    ${d.pertes.map((p,i)=>`<tr><td><input type="number" data-pi="${i}" data-pk="annee" value="${p.annee}" style="max-width:110px" aria-label="Année"></td><td class="n"><input type="number" data-pi="${i}" data-pk="montant" value="${p.montant}" style="max-width:140px" aria-label="Montant"></td><td class="n"><input type="number" data-pi="${i}" data-pk="utilise" value="${p.utilise}" style="max-width:140px" aria-label="Déjà imputé"></td><td>${p.annee+P.pertesAns}${d.exercice-p.annee===P.pertesAns?` <span class="pill p-warn">expire en ${d.exercice}</span>`:d.exercice-p.annee>P.pertesAns?` <span class="pill p-crit">expirée</span>`:""}</td></tr>`).join("")}
+  </tbody></table></div><button class="btn sm ghost" id="addPerte" type="button">+ Ajouter une année</button></div></section>
+  <section class="card"><div class="hd"><div class="sec-title"><span class="ix">1.c</span><h2>Actionnaire-dirigeant</h2></div><span class="hint">Module personne physique : interface société / actionnaire</span></div><div class="bd grid g4">
+    ${field("a_part","Participation (%)",a.participation,"number")}
+    ${field("a_sal","Salaire annuel (CHF)",a.salaire,"number")}
+    ${field("a_lpp","Potentiel de rachat LPP (CHF)",a.lppRachat,"number","Certificat LPP")}
+    ${field("a_3a","3e pilier A déjà versé (CHF)",a.p3aVerse,"number")}
+    ${field("a_cc","Avance à l’actionnaire (CHF)",a.ccSolde,"number","Compte courant")}
+    ${field("a_cci","Intérêt facturé sur l’avance (CHF)",a.ccInteret,"number")}
+  </div></section>
+  <section class="card"><div class="hd"><div class="sec-title"><span class="ix">1.d</span><h2>Situation particulière et imports</h2></div></div><div class="bd grid g3">
+    ${sel("f_tva","Assujettie à la TVA",d.tva?"1":"0",[["1","Oui"],["0","Non"]],"LTVA art. 10")}
+    ${sel("f_tvam","Méthode de décompte TVA",d.tvaMethode,[["effective","Effective"],["tdfn","Taux de la dette fiscale nette"]],"LTVA art. 37")}
+    <label class="f"><span>Grand livre (CSV)<em>n°;date;débit;crédit;montant;libellé;pièce;tiers</em></span><input type="file" id="f_csv" accept=".csv,text/csv"></label>
+  </div><div class="bd" style="padding-top:0"><div class="tablewrap"><table><thead><tr><th>Pièce importée</th><th>Contenu</th><th>État</th></tr></thead><tbody>
+    <tr><td>Grand livre 2026</td><td>${d.journal.length} écritures</td><td><span class="pill p-ok">Importé</span></td></tr>
+    <tr><td>Tableau des immobilisations</td><td>${d.immos.length} immobilisations</td><td><span class="pill p-ok">Importé</span></td></tr>
+    <tr><td>Balance âgée des débiteurs</td><td>CHF ${chf(d.debiteursCH)} suisses</td><td><span class="pill p-ok">Importé</span></td></tr>
+    <tr><td>Décomptes TVA 2026</td><td>Collectée ${chf(d.tvaCollectee)} · préalable ${chf(d.tvaPrealable)}</td><td><span class="pill p-ok">Importé</span></td></tr>
+    <tr><td>Comptes de l’exercice précédent</td><td>—</td><td><span class="pill p-warn">Manquant</span></td></tr>
+  </tbody></table></div></div></section>
+  <div class="row"><span class="spacer"></span><button class="btn primary" id="toStep2" type="button">Passer au contrôle des données</button></div>`;
+}
+function readCadrage(){
+  const d=S.d, v=id=>$(id)?.value, n=id=>+($(id)?.value||0);
+  d.nom=v("#f_nom"); d.forme=v("#f_forme"); d.structure=v("#f_structure"); d.canton=v("#f_canton"); d.commune=v("#f_commune"); d.creation=n("#f_creation"); d.effectif=n("#f_effectif"); d.noga=v("#f_noga"); d.exercice=n("#f_exercice");
+  d.ca=n("#f_ca"); d.bai=n("#f_bai"); d.capital=n("#f_capital"); d.rac=n("#f_rac"); d.reservesLeg=n("#f_resleg"); d.benefReporte=n("#f_benrep"); d.dividendePrevu=n("#f_div"); d.debiteursCH=n("#f_deb");
+  d.tva=v("#f_tva")==="1"; d.tvaMethode=v("#f_tvam");
+  const a=d.actionnaire; a.participation=n("#a_part"); a.salaire=n("#a_sal"); a.lppRachat=n("#a_lpp"); a.p3aVerse=n("#a_3a"); a.ccSolde=n("#a_cc"); a.ccInteret=n("#a_cci");
+  document.querySelectorAll("[data-pi]").forEach(i=>{ d.pertes[+i.dataset.pi][i.dataset.pk]=+i.value; });
+}
+function bCadrage(){
+  $("#view").querySelectorAll("input,select").forEach(el=>el.addEventListener("change",()=>{ readCadrage(); if(el.id==="f_canton"||el.dataset.pi!=null||el.id==="f_exercice") render(); else { const c=canton(S.d.canton); $("#chipDossier").innerHTML=`Dossier <b>${esc(S.d.nom)}</b>`; $("#chipCanton").innerHTML=`Canton <b>${esc(c.code)}</b> · ${pct(c.rate)}`; } }));
+  $("#addPerte").onclick=()=>{ readCadrage(); S.d.pertes.push({annee:S.d.exercice-1,montant:0,utilise:0}); render(); };
+  $("#bDemo").onclick=()=>{ S.d=structuredClone(DEMO); S.answers={}; S.fiches=[]; S.run=null; S.maxStep=1; audit("Comptable","Dossier d’exemple rechargé"); render(); };
+  $("#bEmpty").onclick=()=>{ S.d={...structuredClone(DEMO),nom:"Nouvelle société",ca:0,bai:0,capital:100000,rac:0,reservesLeg:0,benefReporte:0,dividendePrevu:0,debiteursCH:0,pertes:[],journal:[],immos:[],planted:[],tvaCollectee:0,tvaPrealable:0,actionnaire:{nom:"Actionnaire",participation:100,salaire:0,p3aVerse:0,lppRachat:0,ccSolde:0,ccInteret:0}}; S.answers={}; S.fiches=[]; S.run=null; S.maxStep=1; render(); };
+  $("#f_csv").onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const txt=await f.text(); const rows=txt.split(/\r?\n/).filter(l=>l.trim()); const sep=rows[0].includes(";")?";":","; const body=/date/i.test(rows[0])?rows.slice(1):rows;
+    const J=body.map(l=>l.split(sep).map(s=>s.replace(/^"|"$/g,"").trim())).filter(c=>c.length>=6).map(c=>({no:c[0],date:c[1],debit:c[2],credit:c[3],montant:parseFloat(String(c[4]).replace(/['\s]/g,"").replace(",","."))||0,libelle:c[5],piece:c[6]||"",tiers:c[7]||"",tag:""}));
+    if(J.length){ S.d.journal=J; S.d.planted=[]; audit("Comptable","Grand livre importé",`${f.name} · ${J.length} écritures`); render(); } else { e.target.value=""; e.target.insertAdjacentHTML("afterend",`<span class="hint" style="color:var(--crit)">Aucune écriture lisible : vérifiez le séparateur et les 6 premières colonnes.</span>`); } };
+  $("#toStep2").onclick=()=>{ readCadrage(); S.maxStep=Math.max(S.maxStep,2); S.step=2; audit("Comptable","Cadrage validé",S.d.nom); render(); window.scrollTo(0,0); };
+}
+
+function controls(){
+  const d=S.d, J=d.journal; const sumD=J.reduce((a,e)=>a+e.montant,0);
+  const unmapped=J.filter(e=>!ACCOUNTS[e.debit]||!ACCOUNTS[e.credit]);
+  const att=J.filter(e=>e.debit==="1099"||e.credit==="1099");
+  const pm=pseudoMap();
+  return [
+    {st:"ok",t:"Débit = crédit",d:`${J.length} écritures en partie double, total CHF ${chf(sumD)} au débit et au crédit.`},
+    {st:att.length?"warn":"ok",t:"Balance = bilan",d:att.length?`Écart lié au compte d’attente 1099 (CHF ${chf(att.reduce((a,e)=>a+e.montant,0))}) : sera signalé par les contrôles transverses.`:"Les soldes concordent avec le bilan."},
+    {st:"warn",t:"Soldes d’ouverture = clôture N-1",d:"Comptes 2025 non importés : contrôle impossible. Ajoutez-les au cadrage pour l’activer."},
+    {st:unmapped.length?"warn":"ok",t:"Mapping plan comptable PME (classes 1 à 9)",d:unmapped.length?`${unmapped.length} écriture(s) sur des comptes hors plan : ${[...new Set(unmapped.flatMap(e=>[e.debit,e.credit]).filter(a=>!ACCOUNTS[a]))].join(", ")}`:`Tous les comptes sont reconnus (${new Set(J.flatMap(e=>[e.debit,e.credit])).size} comptes utilisés).`},
+    {st:"ok",t:"Pseudonymisation",d:`${Object.keys(pm).length} clients, fournisseurs et personnes remplacés par des identifiants avant tout envoi à l’IA.`},
+    {st:d.immos.length?"ok":"crit",t:"Rapport de complétude",d:d.immos.length?"Grand livre, immobilisations, débiteurs et décomptes TVA présents. Manque : comptes N-1 (non bloquant).":"Tableau des immobilisations manquant : retour au cadrage requis."}
+  ];
+}
+function vControle(){
+  const C=controls(), pm=pseudoMap(); const blocking=C.some(c=>c.st==="crit");
+  const classes={}; S.d.journal.forEach(e=>[e.debit,e.credit].forEach(a=>{ const k=a[0]; classes[k]=(classes[k]||0)+1; }));
+  return `<div class="lead"><div><h1>2. Contrôle et préparation des données</h1><p>Contrôles d’intégrité automatiques avant toute analyse. Si une pièce manque, HelvetiaTax la demande et renvoie au cadrage.</p></div></div>
+  <div class="grid g2" style="align-items:start">
+  <section class="card"><div class="hd"><h2>Contrôles d’intégrité</h2><span class="pill ${blocking?"p-crit":C.some(c=>c.st==="warn")?"p-warn":"p-ok"}">${blocking?"Bloquant":C.filter(c=>c.st==="warn").length+" point(s) d’attention"}</span></div><div class="bd checks">
+  ${C.map(c=>`<div class="chk"><span class="ic ${c.st}">${c.st==="ok"?"✓":c.st==="warn"?"!":"×"}</span><div><b>${esc(c.t)}</b><div class="hint">${esc(c.d)}</div></div></div>`).join("")}
+  </div></section>
+  <div class="grid">
+  <section class="card"><div class="hd"><h2>Pseudonymisation</h2><span class="hint">Données envoyées à l’IA</span></div><div class="bd tablewrap"><table><thead><tr><th>Nom réel</th><th>Identifiant transmis</th></tr></thead><tbody>${Object.entries(pm).map(([n,i])=>`<tr><td>${esc(n)}</td><td class="mono">${i}</td></tr>`).join("")||`<tr><td colspan="2" class="hint">Aucun tiers</td></tr>`}</tbody></table></div></section>
+  <section class="card"><div class="hd"><h2>Comptes par classe</h2></div><div class="bd tablewrap"><table><tbody>${Object.entries(classes).sort().map(([k,v])=>`<tr><td>Classe ${k}</td><td class="hint">${({1:"Actifs",2:"Passifs",3:"Produits d’exploitation",4:"Charges de matériel",5:"Charges de personnel",6:"Autres charges d’exploitation",7:"Activités annexes",8:"Hors exploitation",9:"Clôture"})[k]||""}</td><td class="n">${v} mouvements</td></tr>`).join("")}</tbody></table></div></section>
+  </div></div>
+  <section class="card"><div class="hd"><h2>Grand livre (extrait)</h2><span class="hint">${S.d.journal.length} écritures · lignes surlignées : sans pièce justificative</span></div><div class="bd tablewrap"><table><thead><tr><th>N°</th><th>Date</th><th>Débit</th><th>Crédit</th><th class="n">CHF</th><th>Libellé</th><th>Pièce</th></tr></thead><tbody>
+  ${S.d.journal.map(e=>`<tr class="${!e.piece||e.piece==="—"?"nopiece":""}"><td class="mono">${esc(e.no)}</td><td class="tab">${esc(e.date)}</td><td>${esc(e.debit)} <span class="hint">${esc(ACCOUNTS[e.debit]||"")}</span></td><td>${esc(e.credit)}</td><td class="n">${chf(e.montant)}</td><td>${esc(e.libelle)}</td><td class="mono">${esc(e.piece||"—")}</td></tr>`).join("")}
+  </tbody></table></div></section>
+  <div class="row"><button class="btn" id="back1" type="button">Retour au cadrage</button><span class="spacer"></span><button class="btn primary" id="go" type="button" ${blocking?"disabled":""}>Lancer l’analyse fiscale</button></div>`;
+}
+function bControle(){ $("#back1").onclick=()=>{ S.step=1; render(); }; $("#go").onclick=()=>{ S.maxStep=Math.max(S.maxStep,3); S.step=3; render(); startAnalysis(); }; }
+
+function vAnalyse(){
+  const R=S.run;
+  if(!R) return `<div class="lead"><div><h1>3. Analyse fiscale</h1><p>Lancez l’analyse depuis l’étape de contrôle.</p></div></div>`;
+  return `<div class="lead"><div><h1>3. Analyse fiscale</h1><p>L’orchestrateur lance un agent par famille d’impôt. L’IA repère, explique et rédige ; les montants sont calculés par le moteur déterministe. En cas de doute, l’analyse s’arrête et la question est posée à l’expert.</p></div>
+  <span class="pill ${R.state==="done"?"p-ok":R.state==="paused"?"p-warn":"p-acc"}" id="runState">${R.state==="done"?"Analyse terminée":R.state==="paused"?"En attente de l’expert":"Analyse en cours"}</span></div>
+  ${R.state==="paused"&&R.pending?`<div class="banner warn row"><span><b>Analyse suspendue.</b> ${esc(R.pending.titre)} : une réponse de l’expert est nécessaire.</span><span class="spacer"></span><button class="btn sm" id="reopenQ" type="button">Répondre</button></div>`:""}
+  <section class="card"><div class="hd"><h2>Agents</h2><span class="hint">${AI?"Revue IA active":"IA inactive (connectez-vous à Claude) : moteur déterministe seul"}</span></div><div class="bd" id="agents"></div></section>
+  ${R.state==="done"?`<div class="row"><span class="hint">${S.fiches.length} fiches prêtes · ${S.ecartees.length} écartée(s) faute de base légale</span><span class="spacer"></span><button class="btn primary" id="toVal" type="button">Valider les fiches</button></div>`:""}`;
+}
+function paintRun(){ const box=$("#agents"); if(!box||!S.run) return;
+  box.innerHTML=S.run.agents.map(a=>`<div class="agent"><div><b>${esc(a.name)}</b><div class="hint">${esc(a.st)}${a.st==="terminé"?` · ${a.n} résultat(s)`:""}</div></div><div class="bar ${a.st==="en pause"?"paused":a.st==="terminé"?"done":""}"><i style="width:${a.p}%"></i></div><span class="pill ${a.st==="terminé"?"p-ok":a.st==="en pause"?"p-warn":a.st==="en cours"?"p-acc":"p-neutral"}">${esc(a.st)}</span></div>`).join(""); }
+function bAnalyse(){ paintRun(); const r=$("#reopenQ"); if(r) r.onclick=()=>openQuestion(S.run.pending); const t=$("#toVal"); if(t) t.onclick=()=>{ S.step=4; render(); window.scrollTo(0,0); }; }
+
+function ficheCard(f){
+  const g=gainOf(f), open=S.open[f.id];
+  const st={proposee:["À valider",""],validee:["✓ Validée",""],ajustee:["✓ Validée · ajustée",""],rejetee:["✕ Rejetée",""]}[f.statut];
+  const risk={faible:["Risque faible","p-ok"],moyen:["Risque moyen","p-warn"],eleve:["Risque élevé","p-crit"]}[f.risque];
+  const needDouble=f.risque==="eleve";
+  return `<article class="fiche r-${f.risque} st-${f.statut}" id="card-${f.id}">
+  <div class="fh" data-tog="${f.id}" role="button" tabindex="0" aria-expanded="${!!open}"><div><h3>${esc(f.titre)}</h3><div class="meta"><span class="pill p-neutral">${esc(f.impot)}</span><span class="pill ${risk[1]}">${risk[0]}</span><span class="pill p-neutral">${esc(f.urgence)}</span>${f.expert?`<span class="pill p-acc">Réponse expert</span>`:""}</div></div>
+  <div class="right"><span class="stamp s-${f.statut}">${st[0]}</span><div class="gain ${g.total<0?"neg":""}">${f.kind==="info"?"—":(g.total>0?"+":"")+chf(g.total)}<small>${f.kind==="info"?"information":f.kind==="interet"?`risque IA évité ${chf(g.iaRisk)}`:"CHF · effet net"}</small></div></div></div>
+  ${open?`<div class="fb">
+    <dl class="kv"><dt>Constat</dt><dd>${esc(f.constat)}</dd>
+    <dt>Pièces liées</dt><dd>${(f.pieces||[]).map(esc).join("<br>")||"—"}</dd>
+    ${f.ecriture?`<dt>Écriture proposée</dt><dd class="mono">D ${f.ecriture.d} ${esc(ACCOUNTS[f.ecriture.d]||"")} / C ${f.ecriture.c} ${esc(ACCOUNTS[f.ecriture.c]||"")} : CHF ${chf(f.montantAjuste??f.montant)}</dd>`:""}
+    ${f.kind!=="info"?`<dt>Calcul du moteur</dt><dd class="tab">Montant CHF ${chf(f.montantAjuste??f.montant)}${g.dBase?` · bénéfice imposable ${g.dBase>0?"+":"−"}${chf(Math.abs(g.dBase))}`:""}<br>IFD ${chf(g.ifd)} · ICC ${chf(g.icc)}${g.tva?` · TVA ${chf(g.tva)}`:""}${g.pp?` · impôt personnel actionnaire ${chf(g.pp)}`:""} → <b>${chf(g.total)}</b><br><span class="hint">Taux effectif ${S.d.canton} ${pct(rate())} dont IFD ${pct(P.ifdEff)}${f.kind==="pp"?` · taux marginal actionnaire ${pct(S.answers.Q_TMARG?.t??.3,0)}`:""}</span></dd>`:""}
+    <dt>Base légale</dt><dd class="refs">${f.refs.map(refChip).join("")}${(f.ext||[]).map(x=>`<span class="ref ext" title="Paramètre de pratique, source primaire non chargée">${esc(x)}</span>`).join("")}</dd>
+    ${f.motif?`<dt>Motif du rejet</dt><dd>${esc(f.motif)}</dd>`:""}</dl>
+    <div id="ai-${f.id}">${S.aiNotes[f.id]||""}</div>
+    ${needDouble&&f.statut==="proposee"?`<div class="banner crit">Risque élevé : double validation requise (comptable et fiscaliste).</div>`:""}
+    <div class="actions">
+      ${needDouble?`<label class="row hint"><input type="checkbox" data-dv="c" data-f="${f.id}" ${f.dvC?"checked":""}> Comptable</label><label class="row hint"><input type="checkbox" data-dv="f" data-f="${f.id}" ${f.dvF?"checked":""}> Fiscaliste</label>`:""}
+      <button class="btn sm primary" data-act="valider" data-f="${f.id}" type="button" ${needDouble&&!(f.dvC&&f.dvF)?"disabled":""}>Valider</button>
+      ${f.kind!=="info"?`<span class="row"><input type="number" id="adj-${f.id}" value="${f.montantAjuste??f.montant}" style="width:130px" aria-label="Montant ajusté"><button class="btn sm" data-act="ajuster" data-f="${f.id}" type="button">Ajuster le montant</button></span>`:""}
+      <button class="btn sm danger" data-act="rejeter" data-f="${f.id}" type="button">Rejeter</button>
+      <button class="btn sm ghost" data-act="expliquer" data-f="${f.id}" type="button">Demander une explication à l’IA</button>
+    </div></div>`:""}
+  </article>`;
+}
+function totals(){
+  const act=S.fiches.filter(isActive), prop=S.fiches;
+  const sum=(L,k)=>L.reduce((a,f)=>a+gainOf(f)[k],0);
+  return {prop:sum(prop,"total"), val:sum(act,"total"), nVal:act.length, nRej:S.fiches.filter(f=>f.statut==="rejetee").length, nOpen:S.fiches.filter(f=>f.statut==="proposee").length, risks:S.fiches.filter(f=>f.risque==="eleve").length};
+}
+function vValidation(){
+  if(!S.fiches.length) return `<div class="lead"><div><h1>4. Validation</h1><p>Aucune fiche : lancez d’abord l’analyse.</p></div></div>`;
+  const T=totals();
+  return `<div class="lead"><div><h1>4. Validation par l’expert</h1><p>Fiches triées par gain décroissant puis par risque. Rien n’est comptabilisé ni déclaré sans validation ; un rejet exige un motif ; un risque élevé exige deux validations.</p></div>
+  <div class="row"><button class="btn sm" id="openAll" type="button">Tout déplier</button><button class="btn sm" id="valAllLow" type="button">Valider tous les risques faibles</button></div></div>
+  <div class="tiles"><div class="tile"><small>Gain proposé par le moteur</small><b>${chf(T.prop)}</b><i>CHF, ${S.fiches.length} fiches</i></div><div class="tile"><small>Gain validé</small><b>${chf(T.val)}</b><i>CHF, ${T.nVal} fiche(s)</i></div><div class="tile"><small>À traiter</small><b>${T.nOpen}</b><i>${T.nRej} rejetée(s)</i></div><div class="tile"><small>Risques élevés signalés</small><b>${T.risks}</b><i>double validation</i></div></div>
+  ${(()=>{ const V=S.fiches.filter(isActive), O=S.fiches.filter(f=>f.statut==="proposee"), R=S.fiches.filter(f=>f.statut==="rejetee"); const n=S.fiches.length, done=V.length+R.length;
+    return `<div class="progress"><div class="row"><b>${done} / ${n} fiches traitées</b><span class="spacer"></span><span class="hint">${V.length} validée(s) · ${O.length} à traiter · ${R.length} rejetée(s)</span></div><div class="pbar"><i class="pv" style="width:${V.length/n*100}%"></i><i class="pr" style="width:${R.length/n*100}%"></i></div></div>
+    <div class="zone zone-ok"><div class="zone-hd"><span class="stamp s-validee">✓ Validées</span><span class="hint">${V.length?`${V.length} fiche(s) · CHF ${chf(V.reduce((a,f)=>a+gainOf(f).total,0))}`:"Aucune fiche validée pour l’instant"}</span></div><div class="grid" id="fiches">${V.map(ficheCard).join("")}</div></div>
+    <div class="divider"><span>${O.length?`Reste à traiter : ${O.length} fiche(s)`:"Toutes les fiches ont été traitées"}</span></div>
+    <div class="grid">${O.map(ficheCard).join("")}</div>
+    ${R.length?`<div class="zone"><div class="zone-hd"><span class="stamp s-rejetee">✕ Rejetées</span><span class="hint">${R.length} fiche(s), motif enregistré</span></div><div class="grid">${R.map(ficheCard).join("")}</div></div>`:""}`; })()}
+  ${S.ecartees.length?`<section class="card"><div class="hd"><h2>Écartées par l’agent contrôleur</h2><span class="hint">Pas de base légale retrouvée = pas de proposition</span></div><div class="bd tablewrap"><table><tbody>${S.ecartees.map(f=>`<tr><td><b>${esc(f.titre)}</b><div class="hint">${esc(f.motif)}</div></td></tr>`).join("")}</tbody></table></div></section>`:""}
+  <div class="row"><span class="spacer"></span><button class="btn primary" id="toRes" type="button">Voir les résultats</button></div>`;
+}
+function bValidation(){
+  if(!S.fiches.length) return;
+  const V=$("#view");
+  V.querySelectorAll("[data-tog]").forEach(h=>{ const t=()=>{ S.open[h.dataset.tog]=!S.open[h.dataset.tog]; render(); const el=$("#card-"+h.dataset.tog); el&&el.scrollIntoView({block:"nearest"}); }; h.onclick=t; h.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); t(); } }; });
+  V.querySelectorAll("[data-dv]").forEach(cb=>cb.onchange=()=>{ const f=S.fiches.find(x=>x.id===cb.dataset.f); if(cb.dataset.dv==="c") f.dvC=cb.checked; else f.dvF=cb.checked; audit(cb.dataset.dv==="c"?"Comptable":"Fiscaliste",cb.checked?"Visa":"Visa retiré",f.id); render(); });
+  V.querySelectorAll("[data-act]").forEach(b=>b.onclick=()=>{ const f=S.fiches.find(x=>x.id===b.dataset.f); const act=b.dataset.act;
+    if(act==="valider"){ f.statut=f.montantAjuste!=null&&f.montantAjuste!==f.montant?"ajustee":"validee"; f.motif=null; audit("Comptable","Fiche validée",`${f.id} · ${f.titre}`); S.open[f.id]=false; nextOpen(); render(); flash(f.id); }
+    if(act==="ajuster"){ const v=parseFloat($("#adj-"+f.id).value); if(isNaN(v)) return; f.montantAjuste=v; f.statut="ajustee"; audit("Comptable",`Montant ajusté ${chf(f.montant)} → ${chf(v)}`,f.id); render(); }
+    if(act==="rejeter") askMotif(f);
+    if(act==="expliquer") explainFiche(f,b);
+  });
+  $("#openAll").onclick=()=>{ const all=S.fiches.every(f=>S.open[f.id]); S.fiches.forEach(f=>S.open[f.id]=!all); render(); };
+  $("#valAllLow").onclick=()=>{ S.fiches.filter(f=>f.risque==="faible"&&f.statut==="proposee").forEach(f=>{ f.statut="validee"; audit("Comptable","Fiche validée (lot risques faibles)",f.id); }); render(); };
+  $("#toRes").onclick=()=>{ S.maxStep=5; S.step=5; render(); window.scrollTo(0,0); };
+}
+function nextOpen(){ const n=S.fiches.find(x=>x.statut==="proposee"); if(n){ S.open[n.id]=true; setTimeout(()=>{ const el=$("#card-"+n.id); el&&el.scrollIntoView({block:"center",behavior:"smooth"}); },60); } }
+function flash(id){ const el=$("#card-"+id); if(el){ el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1300); } }
+function askMotif(f){
+  showModal(`<div class="hd"><h2 id="modalTitle">Rejeter la fiche</h2><button class="btn sm" id="mclose" type="button">Annuler</button></div><div class="bd"><p><b>${esc(f.titre)}</b></p><label class="f"><span>Motif du rejet (obligatoire)</span><textarea id="motif"></textarea></label><p class="hint">Le motif est enregistré dans le journal d’audit et sert à améliorer les règles.</p></div><div class="ft"><button class="btn danger" id="okRej" type="button">Rejeter</button></div>`);
+  $("#motif").focus();
+  $("#okRej").onclick=()=>{ const m=$("#motif").value.trim(); if(m.length<4){ $("#motif").focus(); return; } f.statut="rejetee"; f.motif=m; audit("Comptable","Fiche rejetée",`${f.id} · ${m}`); S.open[f.id]=false; nextOpen(); closeModal(); render(); flash(f.id); };
+}
+
+function byImpot(){
+  const groups={"IFD":0,"ICC":0,"TVA":0,"Impôt anticipé (risque évité)":0,"Actionnaire (PP)":0};
+  S.fiches.filter(isActive).forEach(f=>{ const g=gainOf(f); groups["IFD"]+=g.ifd; groups["ICC"]+=g.icc; groups["TVA"]+=g.tva; groups["Actionnaire (PP)"]+=g.pp; if(g.iaRisk) groups["Impôt anticipé (risque évité)"]+=g.iaRisk; });
+  return groups;
+}
+function profitAfter(){ return S.d.bai + S.fiches.filter(isActive).reduce((a,f)=>a+gainOf(f).dBase,0); }
+function vResultats(){
+  const r=rate(), before=S.d.bai*r, pa=Math.max(0,profitAfter()), after=pa*r, G=byImpot(), T=totals();
+  const act=S.fiches.filter(isActive);
+  const base=canton(S.d.canton); const comp=CANTONS.map(c=>({...c,tax:pa*c.rate})).sort((a,b)=>a.tax-b.tax); const maxTax=Math.max(...comp.map(c=>c.tax),1);
+  const bestC=comp[0];
+  const planted=S.d.planted||[]; const found=new Set(S.fiches.map(f=>f.planted).filter(Boolean));
+  const ppAndTva=G["TVA"]+G["Actionnaire (PP)"];
+  return `<div class="lead"><div><h1>5. Résultats et export</h1><p>Synthèse avant / après sur les seules fiches validées, livrables pour l’ERP et la déclaration, puis une comparaison rapide entre cantons.</p></div></div>
+  <div class="tiles"><div class="tile"><small>Impôt sur le bénéfice avant</small><b>${chf(before)}</b><i>CHF · bénéfice ${chf(S.d.bai)}</i></div><div class="tile"><small>Impôt sur le bénéfice après</small><b>${chf(after)}</b><i>CHF · bénéfice imposable ${chf(pa)}</i></div><div class="tile"><small>Économie totale validée</small><b>${chf(T.val)}</b><i>CHF, tous impôts</i></div><div class="tile"><small>Fiches validées</small><b>${act.length} / ${S.fiches.length}</b><i>${T.nRej} rejetée(s)</i></div></div>
+  ${T.nOpen?`<div class="banner warn">${T.nOpen} fiche(s) encore « proposée(s) » : elles ne sont pas comptées. Retournez à la validation pour les traiter.</div>`:""}
+  <div class="grid g2" style="align-items:start">
+  <section class="card"><div class="hd"><h2>Avant / après par impôt</h2><span class="hint">CHF, fiches validées</span></div><div class="bd tablewrap"><table><thead><tr><th>Impôt</th><th class="n">Effet</th></tr></thead><tbody>
+    ${Object.entries(G).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="n">${v?(v>0?"+":"")+chf(v):"—"}</td></tr>`).join("")}
+    <tr><td><b>Total</b></td><td class="n"><b>${chf(T.val)}</b></td></tr></tbody></table>
+    <p class="hint" style="margin-top:8px">Le risque d’impôt anticipé évité n’est pas compté dans le total. Les effets PP concernent l’actionnaire, pas la société.</p></div></section>
+  <section class="card"><div class="hd"><h2>Points à suivre pour la déclaration</h2></div><div class="bd"><ul style="margin:0;padding-left:18px;display:grid;gap:6px">
+    ${act.some(f=>f.planted==="P1")?"<li>Annexe des pertes reportables : imputer la perte 2019 (dernière année).</li>":""}
+    ${act.some(f=>f.agent==="ia"&&f.kind==="interet")?"<li>Contrat de prêt et facturation des intérêts sur l’avance actionnaire.</li>":""}
+    ${S.d.dividendePrevu?"<li>Impôt anticipé : formulaire 103 dans les 30 jours après l’échéance du dividende ; formulaire 170 pour les RAC.</li>":""}
+    ${act.some(f=>f.agent==="tva")?"<li>Décompte TVA : corrections d’impôt préalable et part privée véhicule.</li>":""}
+    ${act.some(f=>f.agent==="pp")?"<li>Actionnaire : attestations 3a et LPP avant le 31 décembre.</li>":""}
+    <li>Approbation des comptes par l’assemblée générale après comptabilisation des amortissements et provisions (principe de déterminance).</li>
+  </ul></div></section></div>
+  <section class="card"><div class="hd"><div><h2>Comparaison rapide entre cantons</h2><div class="hint">Estimation sans détails : bénéfice imposable après optimisation (CHF ${chf(pa)}) × taux effectif maximal 2026 au chef-lieu</div></div>
+    <span class="pill ${bestC.code===base.code?"p-ok":"p-acc"}">${bestC.code===base.code?"Canton actuel déjà le moins cher":`Écart max. ${chf((base.rate-bestC.rate)*pa)} CHF/an`}</span></div>
+  <div class="bd"><div class="bars">${comp.map(c=>{ const diff=c.tax-pa*base.rate; return `<div class="brow ${c.code===base.code?"base":""}"><span>${esc(c.name)}${c.code===base.code?" · actuel":""}</span><div class="track"><i style="width:${(c.tax/maxTax*100).toFixed(1)}%"></i></div><span class="n tab">${chf(c.tax)} <span class="hint">${pct(c.rate)}</span></span><span class="d n tab ${diff<0?"neg":diff>0?"pos":""}">${c.code===base.code?"—":(diff>0?"+":"−")+chf(Math.abs(diff))}</span></div>`; }).join("")}</div>
+  <p class="hint" style="margin-top:12px">Source : ${refChip("Taux cantonaux 2026 (KPMG)")}. Ordre de grandeur seulement : n’inclut ni l’impôt sur le capital, ni l’imposition de l’actionnaire, ni les coûts d’un transfert de siège, ni les exigences de substance (bureaux, direction effective). Un déménagement fictif peut être requalifié.</p></div></section>
+  <section class="card"><div class="hd"><h2>Exports</h2><div class="row"><label class="hint" for="odf">Format ERP</label><select id="odf" style="width:auto">${["Bexio","Abacus","Crésus","Banana"].map(x=>`<option ${x===S.odFormat?"selected":""}>${x}</option>`).join("")}</select></div></div><div class="bd grid g3">
+    <div><h3>Journal des OD</h3><p class="hint">${act.filter(f=>f.ecriture).length} écriture(s) validée(s), structure d’import simplifiée.</p><div class="row" style="margin-top:8px"><button class="btn sm" data-exp="od" type="button">Télécharger</button><button class="btn sm ghost" data-copy="od" type="button">Copier</button></div></div>
+    <div><h3>Synthèse client (PDF)</h3><p class="hint">Rapport A4 prêt à remettre à la direction : avant / après, pistes validées, décisions, comparaison cantonale.</p><div class="row" style="margin-top:8px"><button class="btn sm" data-exp="syn" type="button">Télécharger le PDF</button><button class="btn sm ghost" data-copy="syn" type="button">Copier</button>${AI?`<button class="btn sm ghost" id="aiSyn" type="button">Rédiger avec l’IA</button>`:""}</div></div>
+    <div><h3>Journal d’audit</h3><p class="hint">${S.audit.length} événements, règles ${RULES_VERSION}.</p><div class="row" style="margin-top:8px"><button class="btn sm" data-exp="audit" type="button">Télécharger</button><button class="btn sm ghost" data-copy="audit" type="button">Copier</button></div></div>
+  </div><div class="bd" style="padding-top:0"><div id="synAI"></div><span class="hint" id="expMsg"></span></div></section>
+  <section class="card"><div class="hd"><h2>Journal d’audit</h2><span class="hint">Qui a validé quoi, quand, avec quelle version des règles</span></div><div class="bd tablewrap"><table><thead><tr><th>Horodatage</th><th>Acteur</th><th>Action</th><th>Objet</th><th>Règles</th></tr></thead><tbody>${S.audit.slice().reverse().map(a=>`<tr><td class="tab">${esc(a.t)}</td><td>${esc(a.actor)}</td><td>${esc(a.action)}</td><td>${esc(a.objet)}</td><td class="mono">${esc(a.v)}</td></tr>`).join("")}</tbody></table></div></section>
+  ${planted.length?`<section class="card"><div class="hd"><h2>Évaluation du prototype</h2><span class="pill ${found.size/planted.length>=.8?"p-ok":"p-warn"}">Rappel ${found.size} / ${planted.length} (${Math.round(found.size/planted.length*100)} %) · objectif ≥ 80 %</span></div><div class="bd tablewrap"><table><thead><tr><th>Erreur placée dans le jeu de test</th><th>Détectée</th></tr></thead><tbody>${planted.map(p=>`<tr><td>${esc(p.id)} · ${esc(p.label)}</td><td>${found.has(p.id)?`<span class="pill p-ok">Oui</span>`:`<span class="pill p-neutral">Non</span>`}</td></tr>`).join("")}</tbody></table>
+  <p class="hint" style="margin-top:8px">Précision mesurée par l’expert : ${act.length} validée(s) sur ${act.length+T.nRej} fiche(s) traitée(s)${act.length+T.nRej?` (${Math.round(act.length/(act.length+T.nRej)*100)} %)`:""} · objectif ≥ 70 %. Exactitude des citations : chaque article cité existe dans la base (vérifié par l’agent contrôleur).</p></div></section>`:""}`;
+}
+function exportText(kind){
+  const act=S.fiches.filter(isActive);
+  if(kind==="od"){ const L=act.filter(f=>f.ecriture); const dt=`31.12.${S.d.exercice}`;
+    const head={Bexio:"Date;Compte débit;Compte crédit;Montant;Libellé;Référence",Abacus:"Datum;Soll;Haben;Betrag;Text;Beleg",Crésus:"Date;Débit;Crédit;Somme;Libellé;Pièce",Banana:"Date;Doc;Description;AccountDebit;AccountCredit;Amount"}[S.odFormat];
+    const row=f=>S.odFormat==="Banana"?[dt,f.id,f.titre,f.ecriture.d,f.ecriture.c,(f.montantAjuste??f.montant).toFixed(2)]:[dt,f.ecriture.d,f.ecriture.c,(f.montantAjuste??f.montant).toFixed(2),f.titre,f.id];
+    return head+"\n"+L.map(f=>row(f).map(x=>String(x).replace(/;/g,",")).join(";")).join("\n"); }
+  if(kind==="audit") return "Horodatage;Acteur;Action;Objet;Règles\n"+S.audit.map(a=>[a.t,a.actor,a.action,a.objet,a.v].map(x=>String(x).replace(/;/g,",")).join(";")).join("\n");
+  const r=rate(), pa=profitAfter(), G=byImpot();
+  return `SYNTHÈSE HELVETIATAX AI – ${S.d.nom} – exercice ${S.d.exercice} – canton ${S.d.canton}\n\nBénéfice avant impôts : CHF ${chf(S.d.bai)}\nBénéfice imposable après optimisation : CHF ${chf(pa)}\nImpôt sur le bénéfice : CHF ${chf(S.d.bai*r)} → CHF ${chf(pa*r)} (taux effectif ${pct(r)})\n\nEffet par impôt (fiches validées) :\n${Object.entries(G).map(([k,v])=>`- ${k} : CHF ${chf(v)}`).join("\n")}\n\nFiches validées :\n${act.map(f=>`- ${f.titre} : CHF ${chf(gainOf(f).total)} [${f.refs.join(", ")}] – risque ${f.risque}`).join("\n")}\n\nDécisions à prendre :\n${S.fiches.filter(f=>/Décision/.test(f.urgence)).map(f=>`- ${f.titre}`).join("\n")||"- aucune"}\n\nRègles ${RULES_VERSION}. Estimations à confirmer par le professionnel responsable.`;
+}
+
+/* ================== SYNTHÈSE PDF ================== */
+const pdfTxt = t => String(t??"").replace(/[’‘]/g,"'").replace(/[−–—]/g,"-").replace(/→/g,"->").replace(/≈/g,"env. ").replace(/≥/g,">=").replace(/≤/g,"<=").replace(/[  ]/g," ").replace(/…/g,"...").replace(/[^\x00-\xFF€‰]/g,"");
+function buildPDF(){
+  const { jsPDF } = window.jspdf; const doc=new jsPDF({unit:"mm",format:"a4"});
+  const W=210, M=16, ink=[20,26,34], muted=[90,101,115], acc=[29,59,92], red=[213,43,30], line=[220,225,231];
+  const d=S.d, r=rate(), pa=Math.max(0,profitAfter()), G=byImpot(), T=totals(), act=S.fiches.filter(isActive), c=canton(d.canton);
+  // en-tête
+  { const k=9/60, ox=M, oy=13; doc.setFillColor(...red); doc.lines([[52*k,0],[0,28*k],[0,18*k,-12*k,28*k,-26*k,32*k],[-14*k,-4*k,-26*k,-14*k,-26*k,-32*k]],ox+4*k,oy+4*k,[1,1],"F",true); doc.setFillColor(255,255,255);
+    [[25,12,10,11],[25,37,10,11],[11,25,11,10],[38,25,11,10],[25.5,25.5,9,9]].forEach(([x,y,w,h])=>doc.roundedRect(ox+x*k,oy+y*k,w*k,h*k,.2,.2,"F")); }
+  doc.setTextColor(...ink); doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.text("HelvetiaTax",M+12,19.6); doc.setTextColor(26,79,160); doc.text("IA",M+12+doc.getTextWidth("HelvetiaTax "),19.6); doc.setTextColor(...ink);
+  doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(...muted); doc.text(pdfTxt("Think Smart. Tax Smarter. Trust HelvetiaTax IA."),M+12,23.6);
+  doc.text(pdfTxt(`Règles ${RULES_VERSION} · ${new Date().toLocaleDateString("fr-CH")}`),W-M,19.6,{align:"right"});
+  doc.setDrawColor(...line); doc.line(M,28,W-M,28);
+  doc.setTextColor(...ink); doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.text(pdfTxt("Synthèse client"),M,40);
+  doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(...muted);
+  doc.text(pdfTxt(`${d.nom} · ${d.forme} · siège ${d.commune} (${c.name}) · exercice ${d.exercice}`),M,46.5);
+  // chiffres clés (4 cases)
+  const tiles=[["Impôt sur le bénéfice avant",`CHF ${chf(d.bai*r)}`],["Impôt sur le bénéfice après",`CHF ${chf(pa*r)}`],["Économie totale validée",`CHF ${chf(T.val)}`],["Fiches validées",`${act.length} / ${S.fiches.length}`]];
+  const tw=(W-2*M-9)/4; tiles.forEach((t,i)=>{ const x=M+i*(tw+3); doc.setDrawColor(...line); doc.setFillColor(247,248,250); doc.roundedRect(x,52,tw,20,1.5,1.5,"FD"); doc.setFontSize(7.5); doc.setTextColor(...muted); doc.text(pdfTxt(t[0]),x+3,57.5); doc.setFont("helvetica","bold"); doc.setFontSize(12.5); doc.setTextColor(...ink); doc.text(pdfTxt(t[1]),x+3,66.5); doc.setFont("helvetica","normal"); });
+  let y=80;
+  const head=(txt)=>{ if(y>255){ doc.addPage(); y=20; } doc.setFont("helvetica","bold"); doc.setFontSize(11.5); doc.setTextColor(...acc); doc.text(pdfTxt(txt),M,y); doc.setFont("helvetica","normal"); y+=3; };
+  const tbl=(h,body,opts={})=>{ doc.autoTable({startY:y,head:[h.map(pdfTxt)],body:body.map(rw=>rw.map(pdfTxt)),margin:{left:M,right:M},theme:"plain",styles:{font:"helvetica",fontSize:8.5,cellPadding:2,textColor:ink,lineColor:line,lineWidth:{bottom:.2}},headStyles:{fontStyle:"bold",textColor:muted,fontSize:7.5,fillColor:[247,248,250]},...opts}); y=doc.lastAutoTable.finalY+9; };
+  head("1. Avant / après par impôt");
+  tbl(["Impôt","Effet (CHF)"],[...Object.entries(G).map(([k,v])=>[k,v?(v>0?"+":"")+chf(v):"-"]),["Total des économies validées",chf(T.val)]],{columnStyles:{1:{halign:"right"}},didParseCell:x=>{ if(x.section==="body"&&x.row.index===Object.keys(G).length) x.cell.styles.fontStyle="bold"; }});
+  doc.setFontSize(7.5); doc.setTextColor(...muted); doc.text(pdfTxt(`Bénéfice avant impôts CHF ${chf(d.bai)} -> bénéfice imposable après optimisation CHF ${chf(pa)}, taux effectif ${pct(r)} (IFD + ICC). Le risque d'impôt anticipé évité n'est pas compté dans le total.`),M,y-5,{maxWidth:W-2*M}); y+=6;
+  head("2. Pistes validées par l'expert");
+  tbl(["Piste","Impôt","Risque","Effet CHF","Base légale"],act.map(f=>{ const g=gainOf(f); return [f.titre+(f.statut==="ajustee"?" (montant ajusté)":""),f.impot,{faible:"Faible",moyen:"Moyen",eleve:"Élevé"}[f.risque],f.kind==="info"?"info":chf(g.total),f.refs.filter(x=>!/^Slides/.test(x)).join(", ")||f.refs.join(", ")]; }),{columnStyles:{0:{cellWidth:62},3:{halign:"right",cellWidth:22},4:{cellWidth:44}}});
+  const dec=S.fiches.filter(f=>/Décision|31\.12/.test(f.urgence)&&f.statut!=="rejetee");
+  head("3. Décisions à prendre par la direction");
+  tbl(["Décision","Échéance"],dec.length?dec.map(f=>[f.titre,f.urgence]):[["Aucune décision ouverte","-"]],{columnStyles:{1:{cellWidth:40}}});
+  const rej=S.fiches.filter(f=>f.statut==="rejetee");
+  if(rej.length){ head("4. Pistes rejetées"); tbl(["Piste","Motif de l'expert"],rej.map(f=>[f.titre,f.motif||""])); }
+  head(`${rej.length?5:4}. Comparaison rapide entre cantons (estimation)`);
+  const comp=CANTONS.map(k=>({...k,tax:pa*k.rate})).sort((a,b)=>a.tax-b.tax); const rows=comp.slice(0,5); if(!rows.some(k=>k.code===c.code)) rows.push(comp.find(k=>k.code===c.code));
+  tbl(["Canton (chef-lieu)","Taux effectif","Impôt estimé CHF","Écart vs actuel"],rows.map(k=>[k.name+(k.code===c.code?" (actuel)":""),pct(k.rate),chf(k.tax),k.code===c.code?"-":chf(k.tax-pa*c.rate)]),{columnStyles:{1:{halign:"right"},2:{halign:"right"},3:{halign:"right"}}});
+  doc.setFontSize(7.5); doc.setTextColor(...muted); doc.text(pdfTxt("Source : KPMG, Clarity on Swiss Taxes 2026 (taux maximaux au chef-lieu). Ordre de grandeur : hors impôt sur le capital, imposition de l'actionnaire, coûts de transfert et exigences de substance."),M,y-5,{maxWidth:W-2*M}); y+=4;
+  head("Points à suivre pour la déclaration");
+  const pts=["Approbation des comptes par l'AG après comptabilisation des amortissements et provisions (principe de déterminance)."];
+  if(act.some(f=>f.planted==="P1")) pts.unshift("Annexe des pertes reportables : imputer la perte 2019 (dernière année utilisable).");
+  if(d.dividendePrevu) pts.push("Impôt anticipé : formulaire 103 dans les 30 jours ; formulaire 170 pour les RAC.");
+  if(act.some(f=>f.agent==="pp")) pts.push("Actionnaire : attestations 3a et LPP avant le 31 décembre.");
+  doc.setFontSize(9); doc.setTextColor(...ink); pts.forEach(t=>{ if(y>275){ doc.addPage(); y=20; } const L=doc.splitTextToSize(pdfTxt("- "+t),W-2*M); doc.text(L,M,y); y+=L.length*4.4+1.5; });
+  // pied de page
+  const n=doc.getNumberOfPages(); for(let i=1;i<=n;i++){ doc.setPage(i); doc.setDrawColor(...line); doc.line(M,284,W-M,284); doc.setFontSize(7); doc.setTextColor(...muted);
+    doc.text(pdfTxt("Prototype de cours (MScCCF, UNIGE) · données fictives · estimations à confirmer par le professionnel responsable, qui valide chaque écriture."),M,288.5); doc.text(`${i} / ${n}`,W-M,288.5,{align:"right"}); }
+  return doc;
+}
+function bResultats(){
+  $("#odf").onchange=e=>{ S.odFormat=e.target.value; };
+  const msg=t=>{ $("#expMsg").textContent=t; };
+  $("#view").querySelectorAll("[data-exp]").forEach(b=>b.onclick=async()=>{ const k=b.dataset.exp; const fn={od:`OD_${S.odFormat}_${S.d.exercice}.csv`,syn:`Synthese_${S.d.nom.replace(/\W+/g,"_")}_${S.d.exercice}.pdf`,audit:`Audit_${S.d.exercice}.csv`}[k]; let txt;
+    if(k==="syn"){ if(!window.jspdf){ msg("Le module PDF n’a pas pu se charger : rechargez la page."); return; } txt=buildPDF().output("blob"); } else txt=exportText(k);
+    if(DL){ try{ await DL.save({filename:fn,data:txt}); msg(`${fn} : téléchargement proposé.`); audit("Comptable","Export",fn); return; }catch(e){ msg("Téléchargement refusé ou indisponible : utilisez Copier."); return; } }
+    msg("Téléchargement indisponible dans cette vue : utilisez Copier."); });
+  $("#view").querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{ try{ await navigator.clipboard.writeText(exportText(b.dataset.copy)); msg("Copié dans le presse-papiers."); }catch(e){ msg("Copie refusée par le navigateur."); } });
+  const s=$("#aiSyn"); if(s) s.onclick=async()=>{ const box=$("#synAI"); s.disabled=true; box.innerHTML=`<div class="aibox">Rédaction…</div>`;
+    const act=S.fiches.filter(isActive); const list=[...new Set(act.flatMap(f=>f.refs))].map(kbByRef).filter(Boolean).slice(0,8);
+    const prompt=`${RULES}\n\nRédige une synthèse client (≤180 mots) pour la direction de ${S.d.nom} : économies validées, décisions à prendre, risques. Montants du moteur uniquement.\n\nDONNÉES DU MOTEUR :\n${exportText("syn")}\n\nEXTRAITS :\n${sourcesBlock(list)}`;
+    try{ let last=""; await AI(prompt,{onText:({text})=>{ last=text; box.innerHTML=`<div class="aibox">${esc(text)}</div>`; }}); const r=renderAI(last,list); box.innerHTML=r.html; bindRefChips(box); audit("IA","Synthèse client rédigée"); }
+    catch(e){ box.innerHTML=`<div class="aibox none">${esc(errText(e))}</div>`; } finally{ s.disabled=false; } };
+}
+
+/* ================== DÉMARRAGE ================== */
+function openChat(){ $("#drawer").classList.add("on"); $("#scrim").classList.add("on"); paintChat(); $("#chatIn").focus(); }
+function closeChat(){ $("#drawer").classList.remove("on"); if(!$("#modal").classList.contains("on")) $("#scrim").classList.remove("on"); }
+$("#btnChat").onclick=openChat; $("#closeChat").onclick=closeChat; $("#btnKB").onclick=openKB;
+$("#chatSend").onclick=sendChat; $("#chatStop").onclick=()=>chatCtl?.abort();
+$("#chatIn").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendChat(); } });
+$("#scrim").onclick=()=>{ if($("#modal").classList.contains("on")){ if(modalClosable) closeModal(); } else closeChat(); };
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if($("#modal").classList.contains("on")&&modalClosable) closeModal(); else if($("#drawer").classList.contains("on")) closeChat(); } });
+
+(()=>{ const sp=$("#splash"); let seen=false; try{ seen=sessionStorage.getItem("htx-splash")==="1"; }catch(e){}
+  const go=()=>{ sp.classList.add("out"); try{ sessionStorage.setItem("htx-splash","1"); }catch(e){} setTimeout(()=>sp.remove(),600); };
+  if(seen){ sp.remove(); } else { $("#enter").onclick=go; sp.addEventListener("click",e=>{ if(e.target===sp) go(); }); $("#enter").focus(); } })();
+audit("Comptable","Dossier ouvert",DEMO.nom);
+render();
+fetch("kb.json").then(r=>r.json()).then(j=>{ KB=j; buildIndex(); render(); }).catch(()=>{ document.getElementById("foot").textContent="Base juridique introuvable : rechargez la page."; });
+(async()=>{ if(REMOTE){ AI=makeRemoteAI(REMOTE); DL=LOCAL_DL; paintAIChip(); if(S.step>=3) render(); return; } try{ if(window.claude){ AI=await claude.use("sample"); DL=await claude.use("downloads"); } }catch(e){ AI=null; } paintAIChip(); if(S.step>=3) render(); })();
+</script>
+</body>
+</html>

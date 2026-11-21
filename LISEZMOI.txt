@@ -1,0 +1,31 @@
+HelvetiaTax IA – mise en ligne (ordre important)
+================================================
+site/    -> index.html, kb.json, config.js  (à déposer sur Cloudflare Pages)
+worker/  -> worker.js                        (à coller dans un Cloudflare Worker)
+
+ÉTAPE 1 – Clé API (console.anthropic.com)
+  Créer un compte, acheter des crédits, fixer une LIMITE DE DÉPENSE MENSUELLE,
+  créer une clé API. Ne la partager avec personne.
+
+ÉTAPE 2 – Site (dash.cloudflare.com > Workers & Pages > Create > Pages > Upload assets)
+  Glisser le dossier site/ puis Deploy.
+  Noter l'adresse obtenue, par ex. https://helvetiatax.pages.dev
+
+ÉTAPE 3 – Serveur (Workers & Pages > Create > Worker)
+  Coller le contenu de worker/worker.js, puis Deploy.
+  Settings > Variables and Secrets, ajouter :
+    ANTHROPIC_API_KEY  (Secret) : la clé de l'étape 1
+    ACCESS_CODE        (Secret) : un code de votre choix, à donner au groupe
+    ALLOWED_ORIGIN     (Text)   : l'adresse de l'étape 2, sans / à la fin
+  Noter l'adresse du Worker, par ex. https://xxx.workers.dev
+
+ÉTAPE 4 – Relier le site au serveur
+  Modifier site/config.js avec l'adresse du Worker, puis re-déposer le dossier
+  site/ dans Cloudflare Pages (Create deployment / Upload assets) pour mettre à jour.
+
+ÉTAPE 5 – Test
+  Ouvrir l'adresse .pages.dev, cliquer sur « IA verrouillée », saisir le code
+  d'accès, puis poser une question dans l'Assistant IA.
+
+Coût : Cloudflare gratuit pour ce volume. Seule la facturation Anthropic
+(crédits consommés) est payante ; la limite de dépense protège le budget.
