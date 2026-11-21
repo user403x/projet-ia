@@ -563,7 +563,7 @@ ${src}`;
   }catch(e){ log(`Revue IA : ${errText(e)} → analyse déterministe seule`); if(e.code==="not_granted"||e.code==="sampling_disabled") AI=null; }
 }
 function pseudo(s,pm){ let o=s; Object.keys(pm).forEach(n=>{ o=o.split(n).join(pm[n]); const last=n.split(" ").pop(); if(last.length>3) o=o.split(last).join(pm[n]); }); return o; }
-function errText(e){ if(e&&e.code==="bad_code"){ setTimeout(()=>askCode("Code d’accès manquant ou incorrect. Saisissez le bon code."),50); } return ({bad_code:"code d’accès manquant ou incorrect",empty_completion:"réponse vide, réessayez",not_granted:"accès à Claude refusé",rate_limited:"trop de requêtes, réessayez plus tard",sampling_disabled:"Claude indisponible pour ce compte",invalid_json:"réponse illisible",cancelled:"arrêté",session_expired:"session expirée"})[e?.code]||"erreur temporaire"; }
+function errText(e){ if(e&&e.code==="bad_code"){ setTimeout(()=>askCode("Code d’accès manquant ou incorrect. Saisissez le bon code."),50); } return ({bad_code:"code d’accès manquant ou incorrect",empty_completion:"réponse vide, réessayez",not_granted:"clé Gemini refusée ou modèle indisponible",rate_limited:"trop de requêtes, réessayez plus tard",sampling_disabled:"Claude indisponible pour ce compte",invalid_json:"réponse illisible",cancelled:"arrêté",session_expired:"session expirée"})[e?.code]||"erreur temporaire"; }
 
 /* ================== QUESTIONS À L'EXPERT ================== */
 function openQuestion(q){
@@ -609,6 +609,46 @@ function makeRemoteAI(url){
   return call;
 }
 const LOCAL_DL = { save: async ({filename,data}) => { const blob = data instanceof Blob ? data : new Blob([data],{type:/\.csv$/.test(filename)?"text/csv":"text/plain"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500); return {status:"saved"}; } };
+const GEMINI_KEY = ((window.HTX_CONFIG && window.HTX_CONFIG.geminiKey) || "").trim();
+const GEMINI_MODEL = (window.HTX_CONFIG && window.HTX_CONFIG.geminiModel) || "gemini-2.5-flash";
+const GEMINI_ON = GEMINI_KEY.length > 20;
+function makeGeminiAI(){
+  const call = async (input, opts={}) => {
+    const msgs = typeof input==="string" ? [{role:"user",content:input}] : input;
+    const system = msgs.filter(m=>m.role==="system").map(m=>m.content).join("\n");
+    const contents = [];
+    for(const m of msgs){
+      if(m.role==="system") continue;
+      const role = m.role==="assistant" ? "model" : "user";
+      const last = contents[contents.length-1];
+      if(last && last.role===role) last.parts[0].text += "\n\n"+m.content;
+      else contents.push({role, parts:[{text:m.content}]});
+    }
+    while(contents.length && contents[0].role!=="user") contents.shift();
+    let r;
+    try{
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`,{
+        method:"POST", headers:{"content-type":"application/json"}, signal:opts.signal,
+        body:JSON.stringify({ ...(system?{systemInstruction:{parts:[{text:system}]}}:{}), contents, generationConfig:{maxOutputTokens:1500, temperature:0.2} })
+      });
+    }catch(e){ throw {code:e&&e.name==="AbortError"?"cancelled":"upstream_error"}; }
+    if(r.status===429) throw {code:"rate_limited"};
+    if(r.status===400||r.status===403||r.status===404) throw {code:"not_granted"};
+    if(!r.ok) throw {code:"upstream_error"};
+    const j = await r.json();
+    const cand = (j.candidates||[])[0] || {};
+    const text = (cand.content?.parts||[]).map(p=>p.text||"").join("");
+    if(!text.trim()) throw {code:"empty_completion"};
+    if(opts.onText) opts.onText({text, delta:text});
+    return {text, truncated: cand.finishReason==="MAX_TOKENS"};
+  };
+  call.json = async (input, opts={}) => {
+    const {text} = await call(typeof input==="string" ? input+"\n\nRéponds uniquement avec la valeur JSON demandée, sans aucun texte autour." : input, opts);
+    const m = text.match(/[\[{][\s\S]*[\]}]/);
+    try{ return JSON.parse(m?m[0]:text); }catch(e){ throw {code:"invalid_json", text}; }
+  };
+  return call;
+}
 function askCode(msg){
   showModal(`<div class="hd"><div><h2 id="modalTitle">Code d’accès HelvetiaTax IA</h2><div class="hint">${esc(msg||"Saisissez le code fourni par l’équipe pour activer l’IA.")}</div></div><button class="btn sm" id="mclose" type="button">Fermer</button></div>
   <div class="bd"><label class="f"><span>Code d’accès</span><input type="text" id="codeIn" value="${esc(getCode())}" autocomplete="off"></label><p class="hint">Le code est gardé uniquement dans ce navigateur.</p></div>
@@ -618,9 +658,9 @@ function askCode(msg){
 }
 
 /* ================== IA : explications et assistant ================== */
-async function ensureAI(){ if(REMOTE){ if(!AI) AI=makeRemoteAI(REMOTE); if(!getCode()){ askCode(); return null; } return AI; } if(AI) return AI; try{ if(window.claude) AI=await claude.use("sample"); }catch(e){ AI=null; } paintAIChip(); return AI; }
-function paintAIChip(){ const c=$("#chipAI"); if(!c) return; if(REMOTE){ c.innerHTML=getCode()?`IA <b>active</b>`:`IA <b>verrouillée</b> · saisir le code`; c.style.cursor="pointer"; c.onclick=()=>askCode(); return; } c.innerHTML=AI?`IA <b>active</b>`:`IA <b>inactive</b> · connectez-vous à Claude`; }
-const NOAI= (window.HTX_CONFIG&&window.HTX_CONFIG.apiUrl) ? `Saisissez le code d’accès (en haut, « IA verrouillée ») pour activer l’IA. Les fiches, elles, restent calculées par le moteur.` : `L’IA n’est pas configurée sur ce site : l’adresse du serveur (fichier config.js) est vide. Les fiches, elles, restent calculées par le moteur.`;
+async function ensureAI(){ if(GEMINI_ON){ if(!AI) AI=makeGeminiAI(); return AI; } if(REMOTE){ if(!AI) AI=makeRemoteAI(REMOTE); if(!getCode()){ askCode(); return null; } return AI; } if(AI) return AI; try{ if(window.claude) AI=await claude.use("sample"); }catch(e){ AI=null; } paintAIChip(); return AI; }
+function paintAIChip(){ const c=$("#chipAI"); if(!c) return; if(GEMINI_ON){ c.innerHTML="IA <b>active</b>"; c.onclick=null; c.style.cursor="default"; return; } if(!GEMINI_KEY){ c.innerHTML="IA <b>inactive</b> · clé à ajouter dans config.js"; return; } if(REMOTE){ c.innerHTML=getCode()?`IA <b>active</b>`:`IA <b>verrouillée</b> · saisir le code`; c.style.cursor="pointer"; c.onclick=()=>askCode(); return; } c.innerHTML=AI?`IA <b>active</b>`:`IA <b>inactive</b> · connectez-vous à Claude`; }
+const NOAI= (window.HTX_CONFIG&&window.HTX_CONFIG.apiUrl) ? `Saisissez le code d’accès (en haut, « IA verrouillée ») pour activer l’IA. Les fiches, elles, restent calculées par le moteur.` : `L’IA n’est pas configurée : ajoutez votre clé Gemini dans le fichier config.js. Les fiches, elles, restent calculées par le moteur.`;
 const RULES = `Tu es HelvetiaTax IA, copilote fiscal de pré-clôture pour PME suisses, au service d'un expert fiscal ou comptable.
 Règles impératives :
 1. Réponds UNIQUEMENT à partir des extraits numérotés [S1], [S2]… fournis. Chaque affirmation juridique, taux ou montant doit citer son extrait entre crochets, ex. [S2].
@@ -831,7 +871,7 @@ function vAnalyse(){
   return `<div class="lead"><div><h1>3. Analyse fiscale</h1><p>L’orchestrateur lance un agent par famille d’impôt. L’IA repère, explique et rédige ; les montants sont calculés par le moteur déterministe. En cas de doute, l’analyse s’arrête et la question est posée à l’expert.</p></div>
   <span class="pill ${R.state==="done"?"p-ok":R.state==="paused"?"p-warn":"p-acc"}" id="runState">${R.state==="done"?"Analyse terminée":R.state==="paused"?"En attente de l’expert":"Analyse en cours"}</span></div>
   ${R.state==="paused"&&R.pending?`<div class="banner warn row"><span><b>Analyse suspendue.</b> ${esc(R.pending.titre)} : une réponse de l’expert est nécessaire.</span><span class="spacer"></span><button class="btn sm" id="reopenQ" type="button">Répondre</button></div>`:""}
-  <section class="card"><div class="hd"><h2>Agents</h2><span class="hint">${AI?"Revue IA active":"IA inactive (connectez-vous à Claude) : moteur déterministe seul"}</span></div><div class="bd" id="agents"></div></section>
+  <section class="card"><div class="hd"><h2>Agents</h2><span class="hint">${AI?"Revue IA active":"IA inactive (clé Gemini absente) : moteur déterministe seul"}</span></div><div class="bd" id="agents"></div></section>
   ${R.state==="done"?`<div class="row"><span class="hint">${S.fiches.length} fiches prêtes · ${S.ecartees.length} écartée(s) faute de base légale</span><span class="spacer"></span><button class="btn primary" id="toVal" type="button">Valider les fiches</button></div>`:""}`;
 }
 function paintRun(){ const box=$("#agents"); if(!box||!S.run) return;
@@ -1037,7 +1077,7 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if($("#modal").cl
 audit("Comptable","Dossier ouvert",DEMO.nom);
 render();
 fetch("kb.json").then(r=>r.json()).then(j=>{ KB=j; buildIndex(); render(); }).catch(()=>{ document.getElementById("foot").textContent="Base juridique introuvable : rechargez la page."; });
-(async()=>{ if(REMOTE){ AI=makeRemoteAI(REMOTE); DL=LOCAL_DL; paintAIChip(); if(S.step>=3) render(); return; } try{ if(window.claude){ AI=await claude.use("sample"); DL=await claude.use("downloads"); } }catch(e){ AI=null; } paintAIChip(); if(S.step>=3) render(); })();
+(async()=>{ if(GEMINI_ON){ AI=makeGeminiAI(); DL=LOCAL_DL; paintAIChip(); if(S.step>=3) render(); return; } if(REMOTE){ AI=makeRemoteAI(REMOTE); DL=LOCAL_DL; paintAIChip(); if(S.step>=3) render(); return; } try{ if(window.claude){ AI=await claude.use("sample"); DL=await claude.use("downloads"); } }catch(e){ AI=null; } paintAIChip(); if(S.step>=3) render(); })();
 </script>
 </body>
 </html>

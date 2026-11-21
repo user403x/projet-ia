@@ -1,4 +1,7 @@
-// Adresse du serveur HelvetiaTax IA (Cloudflare Worker).
-// À remplir après le déploiement du Worker (étape 3 du LISEZMOI), par ex. :
-// window.HTX_CONFIG = { apiUrl: "https://helvetiatax-serveur.xxxx.workers.dev" };
-window.HTX_CONFIG = { apiUrl: "" };
+// Configuration de HelvetiaTax IA.
+// ATTENTION : sur GitHub Pages, ce fichier est lisible par tout le monde.
+// Utilisez une clé Gemini limitée à votre site (restrictions « referrers HTTP »).
+window.HTX_CONFIG = {
+  geminiKey: "",                    // collez ici votre clé Gemini, entre les guillemets
+  geminiModel: "gemini-2.5-flash"   // modèle gratuit ; ne pas modifier sauf indication
+};
